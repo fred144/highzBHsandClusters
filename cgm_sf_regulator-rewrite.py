@@ -1186,19 +1186,19 @@ def plot_halo_diagnostics(results, derived_quant, eta_m=0.5, eta_e=0.1, eta_z=0.
 
 
 # run a test model
-mhalo_z0 = 5e8 * u.Msun
-t_span = (0.1, 1)  # gyrs
-eta_m = 0.1
-eta_e = 0.1
-eta_z = 0.2
-mhalo_t0 = 5e7 * u.Msun
-model = CGM_regulator(
-    mhalo_z0, t_span, tstep=0.001, eta_m=eta_m, eta_e=eta_e, eta_z=eta_z
-)
-run = model.run_halo()
-results = model.get_results()
-derived = model.get_derived_quantities()
-plot_halo_diagnostics(results, derived, eta_m=eta_m, eta_e=eta_e, eta_z=eta_z)
+# mhalo_z0 = 5e8 * u.Msun
+# t_span = (0.1, 1)  # gyrs
+# eta_m = 0.1
+# eta_e = 0.1
+# eta_z = 0.2
+# mhalo_t0 = 5e7 * u.Msun
+# model = CGM_regulator(
+#     mhalo_z0, t_span, tstep=0.001, eta_m=eta_m, eta_e=eta_e, eta_z=eta_z
+# )
+# run = model.run_halo()
+# results = model.get_results()
+# derived = model.get_derived_quantities()
+# plot_halo_diagnostics(results, derived, eta_m=eta_m, eta_e=eta_e, eta_z=eta_z)
 
 
 # %%
@@ -1244,7 +1244,6 @@ def run_redshift_grid(observe_at, mhalos, write_to_file=None):
             )
             run = gridmodel.run_halo()
             results = gridmodel.get_results()
-            derived = gridmodel.get_derived_quantities()
             m_star = results["m_star"][-1]
             m_halo = results["m_halo"][-1]
             print("** final halo mass = {:.2e}".format(m_halo))
