@@ -110,7 +110,7 @@ def t_ff(r, Rvir, mhalo):
 
 def depletion_time(z, mstar, exp, dep_time_norm):
     """depletion time (power-law),
-    eq. 13 from Carr 2023
+   
 
     Args:
         z (_type_): redshift
@@ -127,7 +127,8 @@ def depletion_time(z, mstar, exp, dep_time_norm):
 
 def depletion_time_McGaugh(z, mstar):
     """depletion time fit from McGaugh observations
-
+     eq. 13 from Carr 2023
+     
     Args:
         z (_type_): _description_
         mstar (_type_): _description_
@@ -494,7 +495,7 @@ class CGM_regulator:
         # r1 = 10.0*u.kpc
 
         # get the central density in units of kpc^-3 ?
-        rho0 = density0(mCGM=m_cgm, r1=r1, Rvir=halo_rvir, alpha=self.alpha)
+        rho0 = density0(mCGM=m_cgm, r0=r1, Rvir=halo_rvir, alpha=self.alpha)
 
         # estimate energy ejection loss timescale and limitit to dynamical time
         c_sound = np.sqrt(e_cgm / m_cgm)  # approximate sound speed
@@ -528,6 +529,7 @@ class CGM_regulator:
         )
 
         # (effective) cooling time of CGM
+        # specific energy is the energy per unit mass
         tcool_eff = (cgm_specific_e / dot_e_cgm_cool) * m_cgm
 
         if tcool_eff < 0:
@@ -559,9 +561,10 @@ class CGM_regulator:
             raise ValueError("Negative depletion time")
 
         dot_m_sfr = m_gas / t_depletion
-
+        # CGM feedback gain term, eq 9
+        dot_m_ism_wind = dot_m_sfr * self.eta_m
         # eq 11 ish
-        dot_m_gas = (dot_m_cgm_cool - dot_m_sfr * (1 + self.eta_m)).to(
+        dot_m_gas = (dot_m_cgm_cool - dot_m_sfr  - dot_m_ism_wind).to(
             u.solMass / u.Gyr
         )
         dot_m_sfr = dot_m_sfr.to(u.solMass / u.Gyr)
@@ -618,18 +621,19 @@ class CGM_regulator:
             u.erg * u.Gyr**-1
         )
 
-        # CGM feedback gain term, eq 9
-        dot_m_ism_wind = dot_m_sfr * self.eta_m
+    
 
         ##################  total Mass, Energy, and Metallicity derivatives
         dot_m_cgm = dot_m_cgm_in + dot_m_ism_wind - dot_m_cgm_cool - dot_m_cgm_out
-        dot_m_metal = (
-            self.metal_yield * self.eta_z * dot_m_sfr
-            + self.Z_IGM * self.Z_sol * dot_m_cgm_in
-            - cgm_metallicity * (dot_m_cgm_cool + dot_m_cgm_out)
-        )
+     
         dot_e_cgm = (
             dot_e_ism_wind + 1 * dot_e_cgm_in - dot_e_cgm_out - 1 * dot_e_cgm_cool
+        )
+        
+        dot_m_metal = (
+        self.metal_yield * self.eta_z * dot_m_sfr
+        + self.Z_IGM * self.Z_sol * dot_m_cgm_in
+        - cgm_metallicity * (dot_m_cgm_cool + dot_m_cgm_out)
         )
 
         # limiter
@@ -1199,7 +1203,7 @@ def nfw_profile(r, rho_bulge, r1):
 def isothermal(r, rho0, r1):
     """isothermal profile"""
     return (rho0 / (1 + (r / r1)**2))
-
+#%%
 Rvir = 1
 mISM = 1e8  # Msun
 mCGM = 1e9  # Msun
@@ -1257,7 +1261,7 @@ ax.plot(
     r_full,
     isothermal_profile,
     "--r",
-    label=r"isothermal $\rho_{\rm iso} = \rho_0  [1 + (r/r_0)^2]^{-1}$",
+    label=r"isothermal $\rho_{\rm iso} = 2 \rho_0  [1 + (r/r_0)^2]^{-1}$",
     lw=2
     )
 
