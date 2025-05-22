@@ -92,14 +92,28 @@ def custom_mass_loading(mhalo, A=10, alpha=-1.4):
 
 
 def custom_energy_loading(mhalo_z0, A=0.10, alpha=-0.5):
-    """energy loading factor as a function of halo mass"""
-    return A * (mhalo_z0 / (1e12 * u.solMass)) ** alpha
+    """energy loading fact or as a function of halo mass"""
+    eta_e = A * (mhalo_z0 / (1e12)) ** alpha
+    if np.any(eta_e > 1):
+        eta_e = np.where(eta_e > 1, 1, eta_e)
+    else: # it's a float
+        if eta_e > 1:
+            eta_e = 1
+    return  eta_e
 
 def vcirc_energy_loading(halo_vcirc, alpha_e = 0.1 ):
-    return  alpha_e * (halo_vcirc.value / 200) ** (-3 / 2)
+    eta_e = alpha_e * (halo_vcirc.value / 200) ** (-3 / 2)
+    
+    # if eta e > 1 set to 1, halo_vcirc can be float or array
+    if np.any(eta_e > 1):
+        eta_e = np.where(eta_e > 1, 1, eta_e)
+    else: # it's a float
+        if eta_e > 1:
+            eta_e = 1
+    return  eta_e
 
 def vcirc_mass_loading(halo_vcirc, alpha_m = 9 ):
-    return  alpha_m * (halo_vcirc.value / 200) ** (-3 / 2)
+    return  alpha_m * (halo_vcirc.value /200) ** (-3 / 2)
 
 def t_ff(r, Rvir, mhalo):
     """free-fall time as a function of radius
@@ -219,57 +233,13 @@ def halo_infall_fakhouri(z, mhalo):
     mean_mdot = mean_mdot.to(u.solMass / u.Gyr)
     return mean_mdot
 
-def halo_infall_yung25( z,  mhalo):
-    mhalo = mhalo.value
-    a = 1 / (1 + z)
-    log_beta_z = 2.673 - 2.075* a + 0.891*a**2
-    beta_z = 10**log_beta_z
-    alpha_z = 0.948 + 0.694 * a - 0.565*a**2
-    expansion_rate_z = np.sqrt(Omegam0 * (1 + z)**3 + Omegade0)
-    mdot = beta_z * ((mhalo / 1e12) * expansion_rate_z)**alpha_z
-    return mdot * (u.solMass / u.Gyr) * 1e9
- 
-fig, ax = plt.subplots(figsize=(5, 4), dpi=300) 
-halo_masses_theory = np.geomspace(1e7, 1e13, 100) * u.solMass
-redshifts_theory = np.linspace(30, 2, 5) 
-for i, z in enumerate(redshifts_theory):
-    mdot_fakouri = halo_infall_fakhouri(z, halo_masses_theory).value
-    mdot_yung = halo_infall_yung25( z, halo_masses_theory)
-    mdot_dekel = halo_infall_dekel(z, halo_masses_theory).value
-    
-    
-    ax.plot(
-        halo_masses_theory,
-        mdot_dekel/  halo_masses_theory,
-        color="C0",
-        alpha=0.5,
-        label=f"Dekel, z={z:.1f}",
-    )
-    ax.plot(
-        halo_masses_theory,
-        mdot_fakouri/  halo_masses_theory,
-        color="C1",
-        alpha=0.5,
-        label=f"Fakhouri, z={z:.1f}",
-    )
-    ax.plot(
-        halo_masses_theory,
-        mdot_yung /  halo_masses_theory, # to Gyr
-        color="C2",
-        alpha=0.5,
-        label=f"Yung, z={z:.1f}",
-    )
-    
-ax.legend(loc= "upper left", fontsize=8, ncol=2, bbox_to_anchor=(1.05, 1))
-ax.set(yscale="log", xscale="log", xlabel = "$M_{halo}$ [M$_\odot$]", ylabel = r"$\dot{M}_{halo} / M_{halo}$ [Gyr$^{-1}$]")
-plt.show()    
  
    
 #%%    
 
 
 def virial_T(mhalo, Rvir):
-    """Halo virial temp
+    """Halo fp
 
     Args:
         mhalo (_type_): halo mass
@@ -559,6 +529,54 @@ def circular_velocity(mhalo, Rvir):
     return np.sqrt(G * mhalo / Rvir).to(u.km / u.s)
 
 
+def exponential_disk(r, r_trunc_disk, rho_disk_central):
+    """
+    simple exponential disk profile
+    r_trunc_disk is usually 0.02 of rvir
+    
+    """
+    return rho_disk_central * np.exp(-r / r_trunc_disk)
+
+def disk_central_density(m_total, r_trunc):
+    """
+    for stellar disk or ISM disk?
+    """ 
+    Sigma0 = m_total / (2 * np.pi * r_trunc**2)
+    return Sigma0
+    
+def sfr_density_prof(r,  r_trunc , Sigma0_gas, Sigma0_star, n=1.5 ):
+    """
+    units of msun/gyr/kpc^2
+    is the integrand to solve for the total SFR 
+    """
+    # solve for Sigma_gas, Sigma_star 
+    Sigma_gas = exponential_disk(r, r_trunc, Sigma0_gas)
+    Sigma_star = exponential_disk(r, r_trunc, Sigma0_star)
+    norm = 10  #*u.Msun / u.Gyr / u.kpc**2
+    sfr_prof = norm * (Sigma_gas/ Sigma_star)** n 
+    return sfr_prof
+    
+    
+    
+# # #now, integrate the sfr_density from 0 to inf 
+# # Rvir = 10
+# # r  = np.linspace(0, 100, 10) #* u.kpc
+
+# # mstar = 1e3 #* u.Msun
+# # m_gas = 1e3# * u.Msun
+
+# # r_trunc = 0.02 * Rvir
+# # Sigma0_star = disk_central_density(mstar,r_trunc )
+# # Sigma0_gas = disk_central_density(m_gas,r_trunc )
+
+# # Sigma_gas = exponential_disk(r, r_trunc , Sigma0_gas)
+# # Sigma_star = exponential_disk(r,r_trunc,  Sigma0_star)
+
+# # total_sfr, err = scipy.integrate.quad(sfr_density_prof, 0 ,Rvir, args=(r_trunc, Sigma0_gas, Sigma0_star))
+# # print("total sfr", total_sfr)
+
+
+
 #######
 # fig,ax = plt.subplots(figsize=(8, 6), dpi=300)
 # # Plot halo infall rates for Dekel and Fakhouri as a function of redshift
@@ -709,8 +727,10 @@ class CGM_regulator:
         ### overwrite mass loading as you are stepping through the ODE
         # self.eta_e = custom_energy_loading(m_halo, alpha=-0.5)
         # self.eta_m = custom_mass_loading(m_halo, alpha=-0.7)
-        self.eta_m =  vcirc_mass_loading(halo_vcirc)
-        self.eta_e = vcirc_energy_loading(halo_vcirc)  
+        self.eta_m =  vcirc_mass_loading(halo_vcirc, alpha_m=0.1)
+        self.eta_e = vcirc_energy_loading(halo_vcirc, alpha_e=0.1) 
+        if self.eta_e > 1:
+            self.eta_e = 1 
         
         # e_cgm_hot ~ e_cgm, looks rght
         cgm_temp = ((e_cgm /  m_cgm_hot) * (self.mu / self.kb)).to(u.K)
@@ -860,6 +880,35 @@ class CGM_regulator:
 
         # star formation rate
         dot_m_sfr = m_gas / t_depletion
+        # print("depletion_time", dot_m_sfr)
+        
+        
+        r_trunc = 0.02 * halo_rvir # kpc
+        n = 1.5
+        ism_central_density = m_gas / (2 * np.pi * r_trunc**2) # msun / kpc^2
+        
+        # print("ism_central_density", ism_central_density)
+        # SFR surface density calculation 
+        # sfr_density_norm = 1000 * u.Msun / u.yr / u.kpc**2 # free parameter
+        # kappa_s = 10
+        # Asfr = 1e-12 * kappa_s * 1e9 # msun / yr / kpc^2
+        # dot_m_star = Asfr *  ism_central_density**n * (2 * np.pi *r_trunc**2) / n**2
+        # dot_m_star = dot_m_star * u.solMass / u.Gyr
+        # A = (sfr_density_norm.value / ism_central_density.value **n )* u.yr
+        # print("sfr_density_norm", sfr_density_norm)
+    #     A = 0.05 * (u.Msun / u.kpc**2)**(1-n) * u.yr**-1
+    #     dot_m_sfr = A * ism_central_density**n * 2 * np.pi * (r_trunc**2 / n**2)
+       
+    #    # if dot_m_sfr is nan set to 0 
+    #     if np.isnan(dot_m_sfr.value) or np.isinf(dot_m_sfr.value):
+    #         dot_m_sfr = 0 * u.solMass / u.Gyr
+        
+    
+     
+        # print("dot_m_sfr", dot_m_sfr)
+    
+           
+        
         # ISM gas rate
         dot_m_gas = (dot_m_cgm_cold_falling - dot_m_sfr * (1 + self.eta_m)).to(
             u.solMass / u.Gyr
@@ -1557,7 +1606,7 @@ def plot_halo_diagnostics(results, derived_quant, title: str):
         fontsize=7,
     )
     ax[1].set(
-        ylim=(dot_m_cgm_in.max()/1e6, dot_m_cgm_in.max()*3),
+        ylim=(dot_m_cgm_in.max()/1e6, dot_m_ism_wind.max()*5),
         # xlim=(t[0] * 0.9, t[-1]),
         yscale="log",
         ylabel=r" $ \dot{M} ~ [{\rm M_{\odot} \ Gyr^{-1}}] $",
@@ -1644,57 +1693,65 @@ def plot_halo_diagnostics(results, derived_quant, title: str):
 
     plt.show()
 
-mhalo_z0 = 1e12 * u.Msun
-t_span = (0.1, 13)  # gyrs
-eta_m = 0.1
-eta_e = 0.1
-eta_z = 0.2
+# mhalo_z0 = 1e12 * u.Msun
+# t_span = (0.1, 12.7)  # gyrs
+# eta_m = 0.1
+# eta_e = 0.1
+# eta_z = 0.2
 
-model = CGM_regulator(
-    mhalo_z0, t_span, eta_m=eta_m, eta_e=eta_e, eta_z=eta_z, cooling_dynamic_time_norm=1
-)
-run = model.run_halo()
-results = model.get_results()
-derived = model.get_derived_quantities()
-#%%
+# model = CGM_regulator(
+#     mhalo_z0, t_span, eta_m=eta_m, eta_e=eta_e, eta_z=eta_z, cooling_dynamic_time_norm=1
+# )
+# run = model.run_halo()
+# results = model.get_results()
+# derived = model.get_derived_quantities()
+# #%%
 
-halo_masses = results["m_halo"]
-time = results["t"]
-halo_rvir = derived["halo_rvir"]
-z = derived["z"]
-
-
-halo_sfe = derived["f_star"][-1]
-# plot_halo_profile(results, derived)
-plot_halo_diagnostics(
-    results,
-    derived,
-    title="new energy loading 0.1 * (halo_vcirc / 200) ** (-3/2), old CGM profile, full dynamical added to cooling time",
-)
+# halo_masses = results["m_halo"]
+# time = results["t"]
+# halo_rvir = derived["halo_rvir"]
+# z = derived["z"]
+# t = derived["sim_time"]
 
 
-#%%
+# # halo_sfe = derived["f_star"][-1]
+# # # plot_halo_profile(results, derived)
+# # plot_halo_diagnostics(
+# #     results,
+# #     derived,
+# #     title="new energy loading 0.1 * (halo_vcirc / 200) ** (-3/2), old CGM profile, full dynamical added to cooling time",
+# # )
+
+
+# #%%
+
+# alpha_m = 0.3
+# alpha_e = 0.1
+
 # halo_vcirc = circular_velocity(halo_masses * u.Msun, halo_rvir* u.kpc)
 # old_mass_loading = custom_mass_loading(halo_masses, A=10, alpha=-1.4)
 # old_energy_loading = custom_energy_loading(halo_masses, A=0.1, alpha=-0.5)
-# new_mass_loading = vcirc_mass_loading(halo_vcirc, alpha_m=10)
-# new_energy_loading = vcirc_energy_loading(halo_vcirc, alpha_e=0.1)
-# fig, ax = plt.subplots(2, 1, figsize=(6, 3), dpi=300, sharex=True)
+
+# new_mass_loading = vcirc_mass_loading(halo_vcirc, alpha_m=alpha_m)
+# new_energy_loading = vcirc_energy_loading(halo_vcirc, alpha_e=alpha_e )
+
+
+# fig, ax = plt.subplots(2, 1, figsize=(6, 5), dpi=300, sharex=True)
 # plt.subplots_adjust(hspace=0)
 # ax[0].plot(time, old_mass_loading, label="mass based", color="k")
-# ax[0].plot(time, new_mass_loading, label="halo circular velocity based", color="tab:blue")
+# ax[0].plot(time, new_mass_loading,  color="tab:blue",label=r"halo circular velocity based $\alpha_M = {:}, \alpha_E= {:}$".format(alpha_m, alpha_e))
 # ax[0].set(
     
-#     ylabel=r"$\eta_{\rm mass}$",
+#     ylabel=r"$\eta_{\rm M}$",
 #     yscale="log"
 # )
-# ax[0].legend(ncols=2, title="{:.2e}".format(mhalo_z0))
+# ax[0].legend(ncols=1, title="{:.2e}".format(mhalo_z0))
 
 # ax[1].plot(time, old_energy_loading, label="mass based", color="k") 
 # ax[1].plot(time, new_energy_loading, label="vcirc based", color="tab:blue")
 # ax[1].set(
 #     xlabel="t [Gyr]",
-#     ylabel=r"$\eta_{\rm energy}$",
+#     ylabel=r"$\eta_{\rm E}$",
 #     yscale="log"
 # )
 # # add a twin axis for the redshift
@@ -1707,7 +1764,6 @@ plot_halo_diagnostics(
 # ax2.set_xticks(tick_times)
 # ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
 # ax2.set_xlabel(r"$z$")
-
 
 # plt.show()
 
