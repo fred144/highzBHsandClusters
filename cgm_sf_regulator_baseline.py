@@ -111,6 +111,25 @@ def t_ff(r, Rvir, mhalo):
     v_circ = np.sqrt(G * mhalo / Rvir) * 1.3
     return r / v_circ
 
+def format_sci_notation(value: float, decimals: int = 2) -> str:
+    """
+    Formats a float into scientific notation LaTeX-style for matplotlib.
+
+    Args:
+        value (float): The number to format.
+        decimals (int): Number of decimal places for the coefficient.
+
+    Returns:
+        str: A LaTeX-formatted string in scientific notation.
+    """
+    if value == 0:
+        return f"${0:.{decimals}f}$"
+    
+    exponent = int(f"{value:.0e}".split('e')[1])
+    coefficient = value / (10 ** exponent)
+    formatted = f"{coefficient:.{decimals}f} \\times 10^{{{exponent}}}"
+    return formatted
+
 
 def depletion_time(z, mstar, exp, dep_time_norm):
     """depletion time (power-law),
@@ -648,11 +667,15 @@ class CGMRegulatorBaseline:
         cgm_temp = ((e_cgm / m_cgm) * (self.mu / self.kb)).to(u.K)
         
         # #XXX: overwrite mass loading as you are stepping through the ODE
-        # self.eta_e = custom_energy_loading(m_halo, alpha=-0.5)
-        # self.eta_m = custom_mass_loading(m_halo, alpha=-0.7)
+        self.eta_e = custom_energy_loading(m_halo, alpha=-0.5)
+        self.eta_m = custom_mass_loading(m_halo, alpha=-0.7)
         
-        self.eta_m =  vcirc_mass_loading(halo_vcirc)
-        self.eta_e = vcirc_energy_loading(halo_vcirc)
+        # self.eta_m =  vcirc_mass_loading(halo_vcirc)
+        # self.eta_e = vcirc_energy_loading(halo_vcirc)
+        
+                
+        if self.eta_e > 1:
+            self.eta_e = 1
 
         t_depletion = depletion_time(z, m_star, self.exp, self.dep_time_norm)
         # t_depletion = depletion_time_test(m_gas + m_star, r1)
@@ -710,28 +733,28 @@ class CGMRegulatorBaseline:
         ).to(u.erg / u.Gyr)
 
         # # radiative losses in the cgm, integrated, Eq. 3 from Carr 2023
-        # dot_e_cgm_cool = energy_loss(
-        #     Lamb=cooling_lambda,
-        #     Rvir=halo_rvir,
-        #     r1=r1,
-        #     rho0=rho0,
-        #     mu=self.mu,
-        #     alpha=self.alpha,
-        # ).to(u.erg / u.Gyr)
+        dot_e_cgm_cool = energy_loss(
+            Lamb=cooling_lambda,
+            Rvir=halo_rvir,
+            r1=r1,
+            rho0=rho0,
+            mu=self.mu,
+            alpha=self.alpha,
+        ).to(u.erg / u.Gyr)
 
         ##### new galaxy profile
-        mcgm_and_ism = m_cgm + m_gas
-        Mbaryon = m_cgm + m_gas + m_star
-        total_Mgas = m_cgm + m_gas
-        dot_e_cgm_cool_new, _ = scipy.integrate.quad(
-            makino_cooling_intergrand,
-            r1.to(u.cm).value,  # r_vir to cm for integration limit
-            halo_rvir.to(u.cm).value,  # r_vir to cm for integration limit
-            args=(total_Mgas, Mbaryon, m_halo, z, cgm_temp.value, cooling_lambda, 200),
-        ) * (u.erg / u.s)
-        #### end new profile
-        # print("cooling", dot_e_cgm_cool, dot_e_cgm_cool_new.to(u.erg / u.Gyr))
-        dot_e_cgm_cool = dot_e_cgm_cool_new.to(u.erg / u.Gyr)
+        # mcgm_and_ism = m_cgm + m_gas
+        # Mbaryon = m_cgm + m_gas + m_star
+        # total_Mgas = m_cgm + m_gas
+        # dot_e_cgm_cool_new, _ = scipy.integrate.quad(
+        #     makino_cooling_intergrand,
+        #     r1.to(u.cm).value,  # r_vir to cm for integration limit
+        #     halo_rvir.to(u.cm).value,  # r_vir to cm for integration limit
+        #     args=(total_Mgas, Mbaryon, m_halo, z, cgm_temp.value, cooling_lambda, 200),
+        # ) * (u.erg / u.s)
+        # #### end new profile
+        # # print("cooling", dot_e_cgm_cool, dot_e_cgm_cool_new.to(u.erg / u.Gyr))
+        # dot_e_cgm_cool = dot_e_cgm_cool_new.to(u.erg / u.Gyr)
 
         # speceific energy of eject gas
         cgm_specific_e = self.cgm_ejecti_specific_energy_ratio * max(
@@ -1426,8 +1449,9 @@ def plot_halo_diagnostics(results, derived_quant,  title:str):
     # )
 
     run_text = (
-        
-        r"{:} ran from $z = {:.2f} - {:.2f}$ ({:.2f} - {:.2f} Gyr)"
+        r"{:}"
+        "\n"
+        r"${{\rm ran\: from}}~ z = {:.2f} - {:.2f} ({:.2f} - {:.2f} ~{{\rm Gyr}})$"
         "\n"
         # r"$\eta_m = {:.1f}$"
         # " \n"
@@ -1435,7 +1459,7 @@ def plot_halo_diagnostics(results, derived_quant,  title:str):
         # " \n  "
         # r"$\eta_z = {:.1f}$"
         # "\n"
-        r"and $M_{{\rm halo}}(z = {:.1f}) = {:.0e} ~ M_\odot$, $M_{{\rm halo}}(z = {:.1f}) = {:.0e} ~ M_\odot$, $M_{{\rm halo}}(z = {:.1f}) = {:.0e} ~ M_\odot$".format(
+        r"$M_{{\rm halo}}(z = {:.1f}) = {:} ~ M_\odot$, $M_{{\rm halo}}(z = {:.1f}) = {:} ~ M_\odot$, $M_{{\rm halo}}(z = {:.1f}) = {:} ~ M_\odot$".format(
             title,
             adaptive_z[0].value,
             adaptive_z[-1].value,
@@ -1445,11 +1469,11 @@ def plot_halo_diagnostics(results, derived_quant,  title:str):
             # eta_e,
             # eta_z,
             adaptive_z[0].value,
-            mhalo_t[0],
+            format_sci_notation(mhalo_t[0], 2),
             adaptive_z[-1].value,
-            mhalo_t[-1],
+            format_sci_notation(mhalo_t[-1], 2),
             0,
-            mhalo_at_z0(mhalo_t[-1] * u.Msun, adaptive_z[-1]),
+            format_sci_notation( mhalo_at_z0(mhalo_t[-1] * u.Msun, adaptive_z[-1]), 2),
         )
     )
     # put text on the corner left
@@ -1465,7 +1489,7 @@ def plot_halo_diagnostics(results, derived_quant,  title:str):
 
     ax[0].set(
         yscale="log",
-        # ylim=(1e52, dot_e_cgm_out[-1] * 10),
+        ylim=(1e52, np.max(dot_e_cgm_cool) * 5),
         ylabel=r"$\dot{E} ~ [{\rm erg \ Gyr^{-1}}]$",
     )
     ax[0].legend(
@@ -1490,7 +1514,7 @@ def plot_halo_diagnostics(results, derived_quant,  title:str):
         fontsize=7,
     )
     ax[1].set(
-        ylim=(1e4, dot_m_cgm_in[-1] * 5),
+        ylim=(1e4, np.max(dot_m_cgm_cool) * 5),
         # xlim=(t[0] * 0.9, t[-1]),
         yscale="log",
         ylabel=r" $ \dot{M} ~ [{\rm M_{\odot} \ Gyr^{-1}}] $",
@@ -1580,21 +1604,21 @@ def plot_halo_diagnostics(results, derived_quant,  title:str):
     plt.show()
 
 
-mhalo_z0 = 1e12 * u.Msun
-t_span = (0.1, 12)  # gyrs
-eta_m = 0.1
-eta_e = 0.1
-eta_z = 0.2
+# mhalo_z0 = 1e12 * u.Msun
+# t_span = (0.1, 1)  # gyrs
+# eta_m = 0.1
+# eta_e = 0.1
+# eta_z = 0.2
 
-# model = CGM_regulator(
+# model = CGMRegulatorBaseline(
 #     mhalo_z0, t_span, eta_m=eta_m, eta_e=eta_e, eta_z=eta_z, cooling_dynamic_time_norm=1
 # )
 # run = model.run_halo()
 # results = model.get_results()
 # derived = model.get_derived_quantities()
 # halo_sfe = derived["f_star"][-1]
-# plot_halo_profile(results, derived)
-# plot_halo_diagnostics(results, derived, title="new energy loading 0.1 * (halo_vcirc / 200) ** (-3/2), old CGM profile, full dynamical added to cooling time")
+# # plot_halo_profile(results, derived)
+# plot_halo_diagnostics(results, derived, title="Baseline Model")
 
 
 # # %%

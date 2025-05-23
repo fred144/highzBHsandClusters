@@ -6,7 +6,7 @@ from astropy import constants as consts
 import numpy as np
 
 mhalo_z0 = 1e12 * u.Msun
-t_span = (0.1, 12.5)  # gyrs
+t_span = (0.1, 1)  # gyrs
 eta_m = 0.1
 eta_e = 0.1
 eta_z = 0.2
@@ -38,7 +38,7 @@ halo_sfe = derived["f_star"][-1]
 plot_halo_diagnostics(
     results,
     derived,
-    title="new energy loading 0.1 * (halo_vcirc / 200) ** (-3/2), old CGM profile, full dynamical added to cooling time",
+    title="new loadings, new sfr",
 )
 
 #%%
@@ -105,3 +105,5 @@ ax[2].plot(t, sfr/dot_m_star, label="SFR old / SFR new")
 ax[2].plot(t, sfr/classic_dot_m_star, label="SFR old / SFR classic")
 ax[2].set(xlabel="Time [Gyr]", ylabel="ratio", yscale="log")
 ax[2].legend()
+
+# %%
