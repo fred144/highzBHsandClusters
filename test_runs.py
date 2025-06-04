@@ -1,30 +1,22 @@
 #%%
-from cgm_sf_regulator import CGM_regulator, plot_halo_diagnostics
+from cgm_sf_regulator import CGM_regulator, plot_halo_diagnostics, halo_diagnostics_v2
 from matplotlib import pyplot as plt
 from astropy import units as u
 from astropy import constants as consts
 import numpy as np
-
-mhalo_z0 = 1e12 * u.Msun
+#%%
+mhalo_z0 = 1e14 * u.Msun
 t_span = (0.1, 1)  # gyrs
 eta_m = 0.1
 eta_e = 0.1
 eta_z = 0.2
 
-
-def circular_velocity(mhalo, Rvir):
-    """circular velocity of the halo
-
-    """
-    G = consts.G
-    return np.sqrt(G * mhalo / Rvir).to(u.km / u.s)
-circular_velocity
-#%%
 model = CGM_regulator(
 
     mhalo_z0, t_span, eta_m=eta_m, eta_e=eta_e, eta_z=eta_z, cooling_dynamic_time_norm=1
 )
 run = model.run_halo()
+#%%
 results = model.get_results()
 derived = model.get_derived_quantities()
 halo_masses = results["m_halo"]
@@ -35,13 +27,26 @@ z = derived["z"]
 t = derived["sim_time"]
 halo_sfe = derived["f_star"][-1]
 # plot_halo_profile(results, derived)
-plot_halo_diagnostics(
+# plot_halo_diagnostics(
+#     results,
+#     derived,
+#     title="new loadings, new sfr",
+# )
+
+halo_diagnostics_v2(
     results,
     derived,
     title="new loadings, new sfr",
 )
 
 #%%
+
+def circular_velocity(mhalo, Rvir):
+    """circular velocity of the halo
+
+    """
+    G = consts.G
+    return np.sqrt(G * mhalo / Rvir).to(u.km / u.s)
 
 # ism mass, depletion time 
 m_ism = results["m_gas"]
