@@ -992,6 +992,7 @@ class CGMRegulatorBaseline:
                     t_ejection.value,
                     cooling_lambda.value,
                     halo_rvir.value,
+                    dot_m_sfr.value,
                 ]
             )
 
@@ -1195,6 +1196,8 @@ class CGMRegulatorBaseline:
             "t_ejection": derived_quantities[:, 16],
             "cooling_lambda": derived_quantities[:, 17],
             "halo_rvir": derived_quantities[:, 18],
+            "dot_m_sfr": derived_quantities[:, 19],
+            
         }
 
 
@@ -1621,7 +1624,7 @@ def plot_halo_diagnostics(results, derived_quant,  title:str):
 # plot_halo_diagnostics(results, derived, title="Baseline Model")
 
 
-# # %%
+# %%
 # # run a grid of model for the depletion time test model
 # dep_time_norm_vals = np.linspace(0.1, 0.9, 5)
 # sfes = []
