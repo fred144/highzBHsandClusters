@@ -137,6 +137,9 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
     mcgm_hot_obs_out = []
     mcgm_cold_obs_out = []
     mbulge_obs_out = []
+    sfr_obs_out = []
+    m_metals_obs_out = []
+    
     # add BH masses
     mbh_obs_out = []
     for zidx, z_obs in enumerate(observe_at):
@@ -153,6 +156,8 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
         mcgm_hot_obs = []
         mcgm_cold_obs = []
         mbh_obs = []
+        sfr_obs = []
+        m_metals_obs = []
         # now, get the mass of the halo at z0 which is what we put into the integrator
         for midx, mhalo in enumerate(mhalos[zidx]):
             # we want to observe mhalo at z_obs, so we have to know its z=0 value for the function below
@@ -163,14 +168,20 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
             )
             print("** mass of halo at z=0 is {:.2e}".format(mhalo_z0))
             gridmodel = CGMRegulator(
-                mhalo_z0, t_span, KS_kappa_s=0.1, disk_scale_length=0.05
+                mhalo_z0, t_span, KS_kappa_s=0.1
             )
 
             run = gridmodel.run_halo()
             results = gridmodel.get_results()
+            derived = gridmodel.get_derived_quantities()
             m_star = results["m_star"][-1]
             m_bulge = results["m_bulge"][-1]
             m_halo = results["m_halo"][-1]
+            m_metals = results["m_metals"][-1]
+            
+            # Z_metal =  m_metals / (results["m_cgm_hot"][-1] + results["m_cgm_cold"][-1])
+            # Z_sun = Z_metal / 0.0127
+
             print("** final halo mass = {:.2e}".format(m_halo))
             mhalo_obs.append(m_halo)
             mstar_obs.append(m_star)
@@ -178,6 +189,8 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
             mism_obs.append(results["m_ism"][-1])
             mcgm_hot_obs.append(results["m_cgm_hot"][-1])
             mcgm_cold_obs.append(results["m_cgm_cold"][-1])
+            sfr_obs.append(derived["dot_m_sfr"][-1])
+            m_metals_obs.append(m_metals)
             # also get the BH mass
 
             # mbh_obs.append(results["m_bh"][-1])
@@ -196,6 +209,8 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
         mism_obs_out.append(mism_obs)
         mcgm_hot_obs_out.append(mcgm_hot_obs)
         mcgm_cold_obs_out.append(mcgm_cold_obs)
+        sfr_obs_out.append(sfr_obs)
+        m_metals_obs_out.append(m_metals_obs)
         # mbh_obs_out.append(mbh_obs)
 
         smhm = mstar_obs / (mhalo_obs * (Ob0 / Omegam0))
@@ -220,10 +235,12 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
         out_file.create_dataset("MISM_obs", data=mism_obs_out)
         out_file.create_dataset("MCGM_hot_obs", data=mcgm_hot_obs_out)
         out_file.create_dataset("MCGM_cold_obs", data=mcgm_cold_obs_out)
+        out_file.create_dataset("SFR_obs", data=sfr_obs_out)
+        out_file.create_dataset("MMetals_obs", data=m_metals_obs_out)
         # also write the m_bulge
         out_file.create_dataset("MBulge_obs", data=mbulge_obs_out)
         
-        
+
         # out_file.create_dataset("MBH_obs", data=mbh_obs_out)
         out_file.close()
 

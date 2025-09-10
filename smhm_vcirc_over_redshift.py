@@ -56,7 +56,7 @@ Ob0 = 0.0490
 f_b = Ob0 / Omegam0
 LCDM = cosmology.LambdaCDM(H0=H0, Om0=Omegam0, Ode0=Omegade0)
 
-mass_bins = 4
+mass_bins = 16
 # %% for z=0 comparisons
 
 # read in behroozi data for comparison
@@ -189,7 +189,7 @@ def vcirc_from_virial_T(Tvir, mu=0.59):
 rvirs = virial_radius(zobs, mhalos)  # virial radius in kpc
 halo_Tvirs = virial_T(mhalos, rvirs)  # virial temperature in K
 vcirc = vcirc_from_virial_T(halo_Tvirs)
-# %% run grid of models for comparison
+# %% run grid of models for comparison using baseline
 
 # write to file
 file = "./runs/smhm_baseline_redshift_scan_more_halo_obsfig2.h5"
@@ -207,11 +207,11 @@ else:
     mhalo_obs = f["Mhalo_obs"]
     print(f.keys())
     print(f["redshifts"][:])
-
+models_label ="C23 model"
 
 #%%
 # write to file
-file = "./runs/smhm_2phase_redshift_scan_KS_kap0p1_rd_0p05.h5"
+file = "./runs/smhm_2phase_redshift_scan_KS_kap0p1_rd_0p02_wSFRandZ.h5"
 
 if not os.path.exists(file):
     redshift_variation, zsims = run_2phase_model_redshift_grid(
@@ -226,7 +226,7 @@ else:
     mhalo_obs = f["Mhalo_obs"]
     print(f.keys())
     print(f["redshifts"][:])
-
+models_label =""
 
 # %%
 
@@ -377,7 +377,7 @@ ax[0].scatter(
     alpha=0.8,
 )
 
-ax[0].text(0.1, 0.9, "2-phase CGM", transform=ax[0].transAxes, ha="left", fontsize=10, va="top")
+ax[0].text(0.1, 0.9, models_label, transform=ax[0].transAxes, ha="left", fontsize=10, va="top")
 
 # make the z=0 line with mask
 # Create mask for Tvir < 1e6
@@ -405,10 +405,10 @@ ax[1].plot(
 ax[1].legend(
     frameon=False, fontsize=9, ncol=3, title="Shuntov et. al. 24", title_fontsize=10, bbox_to_anchor=(0.43, -0.22), loc="upper center"
 )
-ax[0].legend(frameon=False, fontsize=8, ncol=1, title=r"redshift $z$", title_fontsize=10)
-# plt.savefig(
-#     "./figures/2phase_smhm.png", dpi=200, bbox_inches="tight", pad_inches=0.05
-# )
+ax[0].legend(frameon=False, fontsize=8, ncol=2, title=r"redshift $z$", title_fontsize=10, loc="lower right")
+plt.savefig(
+    "./figures/two_phase_smhm_KS_kap0p1_rd_0p02.png", dpi=200, bbox_inches="tight", pad_inches=0.05
+)
 plt.show()
 
 # %%

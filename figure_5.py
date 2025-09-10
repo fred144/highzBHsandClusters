@@ -1,5 +1,4 @@
 # %%
-
 import os
 from pyexpat import model
 import cmasher as cmr
@@ -117,7 +116,7 @@ cmap_colors.append((0.5, 0.5, 0.5))  # add grey color
 
 # %%
 # write to file
-file = "./runs/smhm_2phase_redshift_scan_fig5.h5"
+file = "./runs/smhm_2phase_redshift_scan_KS_kap0p1_rd_0p02.h5"
 
 if not os.path.exists(file):
     redshift_variation, zsims = run_2phase_model_redshift_grid(
@@ -135,7 +134,7 @@ else:
 # %%
 
 fig, ax = plt.subplots(
-    2, 2, figsize=(10, 6), dpi=300, gridspec_kw={"height_ratios": [2, 1]}, sharex=True
+    2, 2, figsize=(10, 5), dpi=300, gridspec_kw={"height_ratios": [3, 2]}, sharex=True,
 )
 plt.subplots_adjust(hspace=0.05)
 
@@ -148,20 +147,22 @@ mcgm_total = mcgm_cold + mcgm_hot
 
 for i, z in enumerate(redshifts):
     ax[0, 0].plot(
-        mhalo_obs[i], mcgm_cold[i], color=cmap_colors[i], label=f"$z={z:.1f}$"
+        mhalo_obs[i], mcgm_cold[i], color=cmap_colors[i], label=f"${z:.1f}$", lw=2
     )
-    ax[0, 1].plot(mhalo_obs[i], mcgm_hot[i], color=cmap_colors[i], label=f"$z={z:.1f}$")
+    ax[0, 1].plot(mhalo_obs[i], mcgm_hot[i], color=cmap_colors[i], label=f"${z:.1f}$", lw=2)
     ax[1, 0].plot(
         mhalo_obs[i],
         mcgm_cold[i] / mcgm_total[i],
         color=cmap_colors[i],
-        label=f"$z={z:.1f}$",
+        label=f"${z:.1f}$",
+        lw=2
     )
     ax[1, 1].plot(
         mhalo_obs[i],
         mcgm_hot[i] / mcgm_total[i],
         color=cmap_colors[i],
-        label=f"$z={z:.1f}$",
+        label=f"${z:.1f}$",
+        lw=2
     )
 
 ax[0, 0].set(
@@ -169,36 +170,40 @@ ax[0, 0].set(
     yscale="log",
     # xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
     ylabel=r"$M_{\mathrm{CGM,cold}}$ [M$_{\odot}$]",
-    xlim=(8e9, 2e13),
-    ylim=(2e5, 2e12),
+    xlim=(1e10, 1e13),
+    ylim=(2e5, 3e11),
 )
 ax[0, 1].set(
     xscale="log",
     yscale="log",
     # xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
     ylabel=r"$M_{\mathrm{CGM,hot}}$ [M$_{\odot}$]",
-    xlim=(8e9, 2e13),
-    ylim=(2e5, 2e12),
+    xlim=(1e10, 1e13),
+    ylim=(1e7, 1e12),
 )
 ax[1, 0].set(
     xscale="log",
     xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
-    ylabel=r"$M_{\mathrm{CGM,cold}} / M_{\mathrm{CGM,total}}$",
-    xlim=(8e9, 2e13),
-    ylim=(0, 1.1),
+    ylabel=r"$M_{\mathrm{CGM,cold}} / M_{\mathrm{CGM}}$",
+    xlim=(1e10, 1e13),
+    ylim=(-0.1, 1.1),
 )
 ax[1, 1].set(
     xscale="log",
     xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
-    ylabel=r"$M_{\mathrm{CGM,hot}} / M_{\mathrm{CGM,total}}$",
-    xlim=(8e9, 2e13),
-    ylim=(0, 1.1),
+    ylabel=r"$M_{\mathrm{CGM,hot}} / M_{\mathrm{CGM}}$",
+    xlim=(1e10, 1e13),
+    ylim=(-0.1, 1.1),
+)
+ax[0, 0].legend(
+    frameon=False, loc="lower right",  fontsize=9, ncol=2, title=r"redshift $z$"
 )
 
-ax[0, 0].legend(
-    frameon=False, loc="lower left", ncols=3, bbox_to_anchor=(0.5, 1.01), fontsize=11
-)
+for axes in ax.ravel():
+    for line in axes.lines:
+        line.set_zorder(1)
+        
 plt.savefig(
-    "./figures/fig5_2phase_CGMfracs.png", dpi=200, bbox_inches="tight", pad_inches=0.05
+    "./figures/twophase_CGM_fractions.png", dpi=200, bbox_inches="tight", pad_inches=0.05
 )
 plt.show()

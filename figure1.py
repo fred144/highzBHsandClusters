@@ -237,7 +237,7 @@ ax[1].set(
     yscale="log",
     ylim=(1e7, 2e11),
     xlim=(results["t"][0] * 0.99, results["t"][-1]),
-    xlabel=r"time [Gyr]",
+    xlabel=r"$t_{\rm univ}$ [Gyr]",
 )
 
 ax[1].legend(ncol=3, frameon=False, fontsize=9, loc="lower right")
@@ -343,7 +343,7 @@ ax[2].set(
     yscale="log",
     ylim=(2e55, 6e58),
     xlim=(results["t"][0] * 0.99, results["t"][-1]),
-    xlabel=r"time [Gyr]",
+    xlabel=r"$t_{\rm univ}$ [Gyr]",
 )
 ax[2].legend(ncol=2, frameon=False, fontsize=9, loc="lower right")
 ax[2].text(
@@ -487,7 +487,7 @@ else:
     print(f.keys())
 
 # %% newest model grid
-file_latest_model = "./runs/smhm_2phase_z0p01.h5"
+file_latest_model = "./runs/smhm_2phase_z0p01-KSkappaS_0p1.h5"
 if not os.path.exists(file_latest_model):
     redshift_variation, zsims = run_2phase_model_redshift_grid(
         observe_at=[0.01],  # redshift we want to observe
@@ -517,6 +517,7 @@ derived = baseline_model.get_derived_quantities()
 latest_model = CGMRegulator(
     mhalo_z0,
     t_span,
+    KS_kappa_s = 0.1
 )
 run_latest = latest_model.run_halo()
 results_latest = latest_model.get_results()
@@ -617,7 +618,7 @@ ax[8].set(
     yscale="log",
     ylim=(2e6, None),
     xlim=(results["t"][0] * 0.99, results["t"][-1]),
-    xlabel=r"time [Gyr]",
+    xlabel=r"$t_{\rm univ}$ [Gyr]",
 )
 # show the cool and hot CGM phases
 ax[8].plot(
@@ -687,7 +688,7 @@ ax[9].set(
     yscale="log",
     ylim=(2e54, 6e58),
     xlim=(0.25, results["t"][-1]),
-    xlabel=r"time [Gyr]",
+    xlabel=r"$t_{\rm univ}$ [Gyr]",
     xscale="log",
 )
 
@@ -740,7 +741,7 @@ for i, axes in enumerate(ax):
     # Place label in upper left, skip panels that are turned off
     if i not in [0, 2]:
         axes.text(
-            0.03, 0.93, panel_labels[i],
+            0.05, 0.90, panel_labels[i],
             transform=axes.transAxes,
             fontsize=10,
             fontweight="bold",

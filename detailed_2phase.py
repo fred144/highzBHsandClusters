@@ -61,7 +61,7 @@ LCDM = cosmology.LambdaCDM(H0=H0, Om0=Omegam0, Ode0=Omegade0)
 
 # %% do a single run of each model
 mhalo_z0 = 1e12 * u.Msun
-t_span = (0.05, 13.3)  # gyrs
+t_span = (0.1, 13.3)  # gyrs
 
 baseline_model = CGMRegulatorBaseline(
     mhalo_z0,
@@ -75,6 +75,7 @@ model_2phase = CGMRegulator(
     mhalo_z0,
     t_span,
     tstep=0.005,
+    KS_kappa_s=0.1,
 )
 run_2phase = model_2phase.run_halo()
 results_2phase = model_2phase.get_results()
@@ -101,27 +102,67 @@ cmapdark2 = plt.get_cmap("Dark2")
 total_clr = cmapdark2(0)
 
 # Panel 0: CGM mass rates
+# let's also include the negative values and take absolute values and have that as dotted line
+# neg_dot_m_cgm_hot_mask = derived_2phase["dot_m_cgm_hot"] < 0
+# neg_dot_m_cgm_cold_mask = derived_2phase["dot_m_cgm_cold"] < 0
+
+time_hot = results_2phase["t"]  # [neg_dot_m_cgm_hot_mask]
+time_cold = results_2phase["t"]  # [neg_dot_m_cgm_cold_mask]
+
+y_hot = -derived_2phase["dot_m_cgm_hot"]  # [neg_dot_m_cgm_hot_mask]
+y_cold = -derived_2phase["dot_m_cgm_cold"]  # [neg_dot_m_cgm_cold_mask]
+
+ax[0].plot(time_hot, y_hot, color=hot_clr, lw=2, ls=":", label=" ")
+
+ax[0].plot(time_cold, y_cold, color=col_clr, lw=2, ls=":", label=" ")
+
+ax[4].plot(time_hot, y_hot, color=hot_clr, lw=2, ls=":", label="")
+
+ax[4].plot(time_cold, y_cold, color=col_clr, lw=2, ls=":", label="")
+
 
 ax[0].plot(
     results_2phase["t"],
     derived_2phase["dot_m_cgm_hot"],
     color=hot_clr,
     lw=2,
-    label=r"$\dot{M}_{\rm CGM, hot}$",
+    label=r"hot",
+    alpha=0.8,
 )
 ax[0].plot(
     results_2phase["t"],
     derived_2phase["dot_m_cgm_cold"],
     color=col_clr,
     lw=2,
-    label=r"$\dot{M}_{\rm CGM, cold}$",
+    label=r"cold",
+    alpha=0.8,
 )
 
-ax[0].legend(frameon=False, ncol=1)
+ax[0].legend(frameon=False, ncol=2, loc="lower right", fontsize=10)
 ax[0].set(
     ylabel=r"$\dot{M}_{\rm CGM}  ~ [{\rm M_{\odot}}\: {\rm Gyr^{-1}}]$",
     yscale="log",
-    ylim=(2e5, 2e10),
+    ylim=(2e5, 9e9),
+)
+ax[0].text(
+    0.63,
+    0.33,
+    r"($-$)",
+    transform=ax[0].transAxes,
+    fontsize=10,
+    ha="center",
+    va="top",
+    color="grey",
+)
+ax[0].text(
+    0.85,
+    0.33,
+    r"(+)",
+    transform=ax[0].transAxes,
+    fontsize=10,
+    ha="center",
+    va="top",
+    color="grey",
 )
 
 # Panel 3: CGM mass rates (inset range)
@@ -130,6 +171,7 @@ ax[4].plot(
     derived_2phase["dot_m_cgm_hot"],
     color=hot_clr,
     lw=2,
+    alpha=0.8,
     label=r"$\dot{M}_{\rm CGM, hot}$",
 )
 ax[4].plot(
@@ -137,9 +179,10 @@ ax[4].plot(
     derived_2phase["dot_m_cgm_cold"],
     color=col_clr,
     lw=2,
+    alpha=0.8,
     label=r"$\dot{M}_{\rm CGM, cold}$",
 )
-ax[4].set(yscale="log", xlim=(0.05, 1.8), ylim=(4e5, 8e9))
+ax[4].set(yscale="log", xlim=(0.05, 1.4), ylim=(4e5, 5e9))
 
 
 # Panel 1: CGM energy rates
@@ -156,7 +199,11 @@ ax[1].plot(
     lw=2,
     # label=r"$\dot{E}_{\rm CGM, total}$",
 )
-ax[1].set(ylabel=r"$\dot{E}_{\rm CGM, total}~ [{\rm erg\: Gyr^{-1}}]$", yscale="log", ylim=(2e52, 2e58))
+ax[1].set(
+    ylabel=r"$\dot{E}_{\rm CGM, total}~ [{\rm erg\: Gyr^{-1}}]$",
+    yscale="log",
+    ylim=(2e52, 5e57),
+)
 ax[1].legend(frameon=False, ncol=1, loc="lower right")
 
 # Panel 4: CGM energy rates (inset range)
@@ -167,7 +214,7 @@ ax[5].plot(
     lw=2,
     label=r"$\dot{E}_{\rm CGM, total}$",
 )
-ax[5].set(yscale="log", xlim=(0.05, 1.8), ylim=(5e52, 6e57))
+ax[5].set(yscale="log", xlim=(0.05, 1.4), ylim=(5e52, 2e57))
 
 
 # --- Custom connectors ---
@@ -186,7 +233,7 @@ con1 = ConnectionPatch(
 con2 = ConnectionPatch(
     xyA=(1, 1),
     coordsA=ax[5].transAxes,
-    xyB=(1.8, 5e52),
+    xyB=(1.4, 5e52),
     coordsB=ax[1].transData,
     color="k",
     lw=1,
@@ -223,7 +270,7 @@ ax[0].figure.add_artist(con1)
 con2 = ConnectionPatch(
     xyA=(1, 1),
     coordsA=ax[4].transAxes,  # LR corner of inset
-    xyB=(1.8, 4e5),
+    xyB=(1.4, 4e5),
     coordsB=ax[0].transData,  # LR of parent zoom
     color="k",
     lw=1,
@@ -253,7 +300,6 @@ blu1 = "dodgerblue"
 blu2 = "tab:green"
 
 
-
 ax[6].plot(
     results_2phase["t"],
     dot_m_cgm_ej,
@@ -280,7 +326,7 @@ ax[6].plot(
 ax[6].plot(
     results_2phase["t"],
     dot_m_cgm_in,
-     ls="--",
+    ls="--",
     lw=2,
     label=r"$\dot{M}_{\rm CGM, acc}$",
     color=red1,
@@ -297,8 +343,8 @@ ax[6].set(
     ylabel=r"mass rates $[{\rm M_{\odot}}\: {\rm Gyr^{-1}}]$",
     yscale="log",
     ylim=(3e5, 2e10),
-    xlabel=r"time $[\mathrm{Gyr}]$",
-    xlim=(0.05, 1.8),
+    xlabel=r"$t_{\rm univ}$ [Gyr]",
+    xlim=(0.05, 1.4),
 )
 ax[6].legend(frameon=False, ncol=2, fontsize=10)
 
@@ -310,6 +356,7 @@ ax[6].text(
     fontsize=10,
     ha="center",
     va="top",
+    color="grey",
 )
 ax[6].text(
     0.8,
@@ -319,15 +366,17 @@ ax[6].text(
     fontsize=10,
     ha="center",
     va="top",
+    color="grey",
 )
 ax[6].text(
     0.8,
     0.12,
-    r"$\leftarrow$ adds to cold gas",
+    r"$\leftarrow$ converts hot to cold",
     transform=ax[6].transAxes,
-    fontsize=10,
+    fontsize=9,
     ha="center",
     va="top",
+    color="grey",
 )
 
 # Panel 5: CGM energy rates (zoomed)
@@ -335,14 +384,14 @@ ax[7].plot(
     results_2phase["t"],
     dot_e_cgm_acc,
     color=red1,
-     ls="--",
+    ls="--",
     lw=2,
     label=r"$\dot{E}_{\rm CGM, acc}$",
 )
 ax[7].plot(
     results_2phase["t"],
     dot_e_sne_wind,
-     ls="--",
+    ls="--",
     color=red2,
     lw=2,
     label=r"$\dot{E}_{\rm SNe, wind}$",
@@ -365,8 +414,8 @@ ax[7].set(
     ylabel=r"energy rates $[{\rm erg\: Gyr^{-1}}]$",
     yscale="log",
     ylim=(5e52, 9.5e57),
-    xlim=(0.05, 1.8),
-    xlabel=r"time $[\mathrm{Gyr}]$",
+    xlim=(0.05, 1.4),
+    xlabel=r"$t_{\rm univ}$ [Gyr]",
 )
 ax[7].legend(frameon=False, ncol=2, fontsize=10)
 
@@ -379,6 +428,7 @@ ax[7].text(
     fontsize=10,
     ha="center",
     va="top",
+    color="grey",
 )
 ax[7].text(
     0.8,
@@ -388,6 +438,7 @@ ax[7].text(
     fontsize=10,
     ha="center",
     va="top",
+    color="grey",
 )
 
 # make a twin redshift axis for the top row, using z
@@ -405,20 +456,24 @@ for i in [0, 1]:
     ax[i].minorticks_on()
     ax[i].set_xlim((None, tmax))
 
-t_ticks = np.array([0.3, 0.6, 1, 1.5])
+t_ticks = np.array([0.3, 0.6, 1, 1.4])
 z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
 for i in [4, 5]:
     ax2 = ax[i].twiny()
     ax2.plot(results_2phase["t"], derived_2phase["dot_m_cgm_hot"], color="k", alpha=0)
-    ax2.set_xlim((0.05, 1.8))
+    ax2.set_xlim((0.05, 1.4))
     ax2.set_xticks(t_ticks)
     ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
     # ax2.set_xlabel(r"$z$")
     ax2.minorticks_off()
     ax[i].minorticks_on()
-    ax[i].set_xlim((0.05, 1.8))
+    ax[i].set_xlim((0.05, 1.4))
     # turn x axis ticks off
     ax[i].set_xticks([])
+
+for axes in ax:
+    for line in axes.lines:
+        line.set_zorder(1)
 
 plt.savefig(
     "./figures/2phase_detailed_cgm_1e12.png",
@@ -426,6 +481,7 @@ plt.savefig(
     bbox_inches="tight",
     pad_inches=0.05,
 )
+
 
 plt.show()
 

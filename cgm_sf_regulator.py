@@ -275,7 +275,7 @@ def density0(mCGM, r0, Rvir, alpha=1.4):
     )
 
 
-def halo_mass_growth(t, mass):
+def halo_mass_growth_fakhouri(t, mass):
     """
     # Halo mass evolution called by initial_mhalo to
     # estimate initial halo mass at arbitrary redshift
@@ -289,8 +289,22 @@ def halo_mass_growth(t, mass):
 
     return mhalo_dot
 
+def halo_mass_growth_dekel(t, mass):
+    """
+    # Halo mass evolution called by initial_mhalo to
+    # estimate initial halo mass at arbitrary redshift
+    """
+    mhalo = mass * u.solMass
+    #    z = np.sqrt((28/t) - 1) - 1 # cosmological redshift
+    if t > 13.47:  # 13.4 is the age of the universe in Gyr
+        t = 13.466983947061877
+    z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
+    mhalo_dot = halo_infall_dekel(z, mhalo)
 
-def mhalo_at_z0(mhalo_at_z, z_obs):
+    return mhalo_dot
+
+
+def mhalo_at_z0_dekel(mhalo_at_z, z_obs):
     """Finds the halo mass at z=0.0001 given its mass at a specified redshift.
 
     Args:
@@ -303,9 +317,25 @@ def mhalo_at_z0(mhalo_at_z, z_obs):
     time_interval = (LCDM.age(z_obs).value, LCDM.age(0.0001).value)
     # print(time_interval)
     mass_initial = np.array([mhalo_at_z.value])
-    sol_0 = solve_ivp(halo_mass_growth, time_interval, mass_initial)
+    sol_0 = solve_ivp(halo_mass_growth_dekel, time_interval, mass_initial)
     return sol_0.y[0][-1]  # return the last value of the solution
 
+
+def mhalo_at_z0_fakhouri(mhalo_at_z, z_obs):
+    """Finds the halo mass at z=0.0001 given its mass at a specified redshift.
+
+    Args:
+        mhalo_at_z (_type_): Halo mass at the observed redshift.
+        z_obs (_type_): Observed redshift.
+
+    Returns:
+        _type_: Halo mass at z=0.0001.
+    """
+    time_interval = (LCDM.age(z_obs).value, LCDM.age(0.0001).value)
+    # print(time_interval)
+    mass_initial = np.array([mhalo_at_z.value])
+    sol_0 = solve_ivp(halo_mass_growth_dekel, time_interval, mass_initial)
+    return sol_0.y[0][-1]  # return the last value of the solution
 
 def energy_gain(eta_e, mstar_dot):
     """energy associated with SN-powered galactic winds,
@@ -331,7 +361,7 @@ def energy_loss(Lamb, Rvir, r1, rho0, mu, alpha):
         Lamb (_type_): cooling function
         Rvir (_type_): virial radius
         r1 (_type_): characteristic radius
-        rho0 (_type_): central density of the CGM
+        rho0 (_type_): central density of the CGM 
 
     Returns:
         _type_: _description_
@@ -583,13 +613,21 @@ class CGMRegulator:
         # r_grav_physical=1,
         # m_bh_seed = 1e2,
         dbug_norm_for_accretion_energy_rate=1,
+        updated_halo_infall=True,
+        updated_loadings=True,
+        updated_2phase_CGM=True,
+        updated_SF_law=True,
+        
     ): 
         #fmt: off  
         self.mhalo_z0 = mhalo_z0 # the mass of the halo we want to run to z=0
         self.verbose = verbose # extra printout
         self.time_interval = time_interval # simulation time in Gyr
         self.tstep = tstep # if set to 1, it is automatically dictated by the solver
-        
+        self.updated_halo_infall = updated_halo_infall
+        self.updated_loadings = updated_loadings
+        self.updated_2phase_CGM = updated_2phase_CGM
+        self.updated_SF_law = updated_SF_law
         
         self.evaluation_time_array = np.arange(
             self.time_interval[0], self.time_interval[1], self.tstep
@@ -653,6 +691,7 @@ class CGMRegulator:
         # dbug, temporary parms
         self.dbug_norm_for_accretion_energy_rate = dbug_norm_for_accretion_energy_rate
         #fmt: on
+        
     def mass_evolution(self, t, mass, ode_mode=True):
         """Ode to solve the mass evolution of the galaxy
 
@@ -689,9 +728,14 @@ class CGMRegulator:
         halo_vcirc = circular_velocity(m_halo, halo_rvir).to(u.km / u.s)
         halo_vir_temp = virial_T(m_halo, halo_rvir).to(u.K)
 
-        # nass ab energy loading
-        self.eta_m = vcirc_mass_loading(halo_vcirc, alpha_m=0.1)
-        self.eta_e = vcirc_energy_loading(halo_vcirc, alpha_e=0.1)
+        # mass and energy loading
+        if self.updated_loadings:
+            self.eta_m = vcirc_mass_loading(halo_vcirc, alpha_m=0.1)
+            self.eta_e = vcirc_energy_loading(halo_vcirc, alpha_e=0.1)
+        else:
+            self.eta_m = custom_mass_loading(m_halo, A=10, alpha=-0.7)
+            self.eta_e = custom_energy_loading(m_halo, A=0.1, alpha=-0.4)
+
         if self.eta_e > 1:  # physical
             self.eta_e = 1
 
@@ -751,7 +795,7 @@ class CGMRegulator:
             mu=self.mu,
             alpha=self.alpha,
         ).to(u.erg / u.Gyr)
-
+        # print(rho0)
         #####  new galaxy profile
         # mcgm_and_ism = m_cgm + m_ism
         # Mbaryon = m_cgm + m_ism + m_star
@@ -794,7 +838,12 @@ class CGMRegulator:
             Asfr * sigma0**self.ks_n * (2 * np.pi * r_disk**2) / self.ks_n**2
         )  # msun / Gyr
 
-        dot_m_sfr = dot_m_star * (u.solMass / u.Gyr) # new SFR
+        if self.updated_SF_law:
+            dot_m_sfr = dot_m_star * (u.solMass / u.Gyr) # new SFR
+        else:
+            t_depletion = depletion_time(z, m_star, self.exp, self.dep_time_norm)
+            dot_m_star= m_ism / t_depletion
+            dot_m_sfr = dot_m_star.to(u.solMass / u.Gyr)  # old SFR
 
         dot_m_bulge = (2 * np.pi * Asfr * sigma0**self.ks_n) / self.ks_n**2
         dot_m_bulge *= r_disk**2 - np.exp(-self.ks_n * self.r_bulge / r_disk) * (
@@ -810,7 +859,10 @@ class CGMRegulator:
         # star formation rate, as above
         dot_m_sfr = dot_m_sfr.to(u.solMass / u.Gyr)
         # halo inflall rate
-        dot_m_halo = halo_infall_fakhouri(z, m_halo)
+        if self.updated_halo_infall:
+            dot_m_halo = halo_infall_fakhouri(z, m_halo)
+        else:
+            dot_m_halo = halo_infall_dekel(z, m_halo)
         # consider only baryonic mass
         dot_m_cgm_in = self.fb * dot_m_halo  # eq. 6
 
@@ -1019,6 +1071,8 @@ class CGMRegulator:
                     dot_m_sfr.value,
                     dot_mstar_central.value,
                     t_ejection.value,
+                    cgm_temp.value,
+                    rho0.to(u.Msun / u.kpc**3).value
                     # dot_m_bh.value,
                     # dot_e_bh_thermfeedback.value,
                     # dot_m_bh_bondi.value,
@@ -1249,6 +1303,8 @@ class CGMRegulator:
             "dot_m_sfr": derived_quantities[:, 16],
             "dot_mstar_central": derived_quantities[:, 17],
             "t_ejection": derived_quantities[:, 18],
+            "cgm_temp": derived_quantities[:, 19],
+            "rho0": derived_quantities[:, 20]
             # "dot_m_bh": derived_quantities[:, 18],
             # "dot_e_bh_thermfeedback": derived_quantities[:, 19],
             # "dot_m_bh_bondi": derived_quantities[:, 20],
@@ -1454,7 +1510,7 @@ def halo_timescales(results, derived_quant, title: str):
             adaptive_z[-1].value,
             sci_notation_tex(mhalo_t[-1]),
             0,
-            sci_notation_tex(mhalo_at_z0(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
+            sci_notation_tex(mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
         )
     )
 
@@ -1643,7 +1699,7 @@ def halo_normalized_rates(results, derived_quant, title: str):
             adaptive_z[-1].value,
             sci_notation_tex(mhalo_t[-1]),
             0,
-            sci_notation_tex(mhalo_at_z0(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
+            sci_notation_tex(mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
         )
     )
     ##############################################################################
@@ -1832,7 +1888,7 @@ def halo_detailed_energy_and_mass_plots(results, derived_quant, title: str):
             adaptive_z[-1].value,
             sci_notation_tex(mhalo_t[-1]),
             0,
-            sci_notation_tex(mhalo_at_z0(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
+            sci_notation_tex(mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
         )
     )
 
@@ -2208,7 +2264,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
             adaptive_z[-1].value,
             sci_notation_tex(mhalo_t[-1]),
             0,
-            sci_notation_tex(mhalo_at_z0(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
+            sci_notation_tex(mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
         )
     )
 

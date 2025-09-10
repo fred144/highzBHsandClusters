@@ -677,8 +677,8 @@ class CGMRegulatorBaseline:
         # self.eta_m =  vcirc_mass_loading(halo_vcirc)
         # self.eta_e = vcirc_energy_loading(halo_vcirc)
 
-        # if self.eta_e > 1:
-        #     self.eta_e = 1
+        if self.eta_e > 1:
+            self.eta_e = 1
 
         t_depletion = depletion_time(z, m_star, self.exp, self.dep_time_norm)
         # t_depletion = depletion_time_test(m_gas + m_star, r1)
