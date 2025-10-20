@@ -13,13 +13,13 @@ import astropy.units as u
 from tqdm import tqdm
 from scipy.interpolate import RegularGridInterpolator
 from astropy.table import Table, join, hstack, vstack
-from cgm_sf_regulator import CGMRegulator, mhalo_at_z0, halo_diagnostics_v2
+from cgm_sf_regulator import CGMRegulator, mhalo_at_z0_fakhouri, halo_diagnostics_v2
 from cgm_sf_regulator_baseline import CGMRegulatorBaseline
 from run_grids_of_models import (
     run_baseline_model_redshift_grid,
     run_2phase_model_redshift_grid,
 )
-
+#%%
 
 ### update matplotlib settings
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
@@ -36,8 +36,8 @@ plt.rcParams.update(
         "ytick.direction": "in",
         "ytick.right": True,
         "xtick.top": True,
-        "xtick.major.size": 4,
-        "ytick.major.size": 4,
+        "xtick.major.size": 5,
+        "ytick.major.size": 5,
         "xtick.minor.size": 3,
         "ytick.minor.size": 3,
         "xtick.minor.visible": True,
@@ -108,14 +108,6 @@ else:
 mhalo_z0 = 1e12 * u.Msun
 t_span = (0.1, 13)  # gyrs
 
-baseline_model = CGMRegulatorBaseline(
-    mhalo_z0,
-    t_span,
-)
-run = baseline_model.run_halo()
-results = baseline_model.get_results()
-derived = baseline_model.get_derived_quantities()
-
 # %%latest model
 latest_model = CGMRegulator(
     mhalo_z0,
@@ -124,6 +116,19 @@ latest_model = CGMRegulator(
 run_latest = latest_model.run_halo()
 results_latest = latest_model.get_results()
 derived_latest = latest_model.get_derived_quantities()
+t_adaptive = results_latest["t"]
+
+
+#%%baseline model
+baseline_model = CGMRegulatorBaseline(
+    mhalo_z0,
+    time_interval=t_adaptive,  # use the same time array as the latest model for direct comparison
+)
+run = baseline_model.run_halo()
+results = baseline_model.get_results()
+derived = baseline_model.get_derived_quantities()
+
+
 
 # %% get properties and plot them with the behroozi
 
@@ -236,7 +241,7 @@ ax[1].set(
     ylabel=r"$\rm Masses ~ [{\rm M_{\odot}}]$",
     yscale="log",
     ylim=(1e7, 2e11),
-    xlim=(results["t"][0] * 0.99, results["t"][-1]),
+    xlim=(0.25, results["t"][-1]),
     xlabel=r"$t_{\rm univ}$ [Gyr]",
 )
 
@@ -334,7 +339,7 @@ ax[2].plot(
     results_latest["egy_cgm"],
     color=color_e_cgm,
     lw=2,
-    label=r"total $E_{\rm CGM}$",
+    label=r"$E_{\rm CGM}$",
     alpha=0.8
 )
 
@@ -342,7 +347,7 @@ ax[2].set(
     ylabel=r"$\rm Energies [{\rm erg}]$",
     yscale="log",
     ylim=(2e55, 6e58),
-    xlim=(results["t"][0] * 0.99, results["t"][-1]),
+    xlim=(0.25, results["t"][-1]),
     xlabel=r"$t_{\rm univ}$ [Gyr]",
 )
 ax[2].legend(ncol=2, frameon=False, fontsize=9, loc="lower right")
@@ -396,61 +401,8 @@ plt.savefig("./figures/fig1_mw_mass_old.png", dpi=200, bbox_inches="tight", pad_
 plt.show()
 # %% new verions
 # %%
-import os
-from pyexpat import model
-
-import numpy as np
-import matplotlib.pyplot as plt
-import matplotlib
-from scipy.integrate import solve_ivp
-from astropy import cosmology
-import h5py
-import astropy.constants as consts
-import astropy.units as u
-from tqdm import tqdm
-from scipy.interpolate import RegularGridInterpolator
-from astropy.table import Table, join, hstack, vstack
-from cgm_sf_regulator import CGMRegulator, mhalo_at_z0, halo_diagnostics_v2
-from cgm_sf_regulator_baseline import CGMRegulatorBaseline
-from run_grids_of_models import (
-    run_baseline_model_redshift_grid,
-    run_2phase_model_redshift_grid,
-)
 
 
-### update matplotlib settings
-matplotlib.rcParams.update(matplotlib.rcParamsDefault)
-plt.rcParams.update(
-    {
-        "text.usetex": True,
-        # "font.family": "Helvetica",
-        "font.family": "serif",
-        "mathtext.fontset": "cm",
-        "xtick.labelsize": 10,
-        "ytick.labelsize": 10,
-        "font.size": 11,
-        "xtick.direction": "in",
-        "ytick.direction": "in",
-        "ytick.right": True,
-        "xtick.top": True,
-        "xtick.major.size": 5,
-        "ytick.major.size": 5,
-        "xtick.minor.size": 3,
-        "ytick.minor.size": 3,
-        "xtick.minor.visible": True,
-        "ytick.minor.visible": True,
-    }
-)
-###
-
-# standard flat cosmology
-H0 = 70
-Omegam0 = 0.3
-Omegade0 = 0.7
-
-Ob0 = 0.0490
-f_b = Ob0 / Omegam0
-LCDM = cosmology.LambdaCDM(H0=H0, Om0=Omegam0, Ode0=Omegade0)
 # %% for z=0 comparisons
 
 # read in behroozi data for comparison
@@ -504,24 +456,27 @@ else:
 # %% do a single run of each model
 mhalo_z0 = 1e12 * u.Msun
 t_span = (0.1, 13)  # gyrs
-
-baseline_model = CGMRegulatorBaseline(
-    mhalo_z0,
-    t_span,
-)
-run = baseline_model.run_halo()
-results = baseline_model.get_results()
-derived = baseline_model.get_derived_quantities()
-
 # %%latest model
 latest_model = CGMRegulator(
     mhalo_z0,
     t_span,
+    add_f_prevent=1e-6,# virtually no floor
     KS_kappa_s = 0.1
 )
 run_latest = latest_model.run_halo()
 results_latest = latest_model.get_results()
 derived_latest = latest_model.get_derived_quantities()
+t_adaptive = results_latest["t"]
+
+baseline_model = CGMRegulatorBaseline(
+    mhalo_z0,
+    time_interval=t_adaptive,  # use the same time array as the latest model for direct comparison
+    
+)
+run = baseline_model.run_halo()
+results = baseline_model.get_results()
+derived = baseline_model.get_derived_quantities()
+
 
 # %%
 
@@ -529,19 +484,18 @@ cmap = plt.get_cmap("Dark2")
 # Color assignments for clarity
 color_star = cmap(5)  # Stellar mass
 color_ism = cmap(4)  # ISM mass
-color_cgm = cmap(2)  # CGM mass
+color_cgm = "grey"# cmap(2)  # CGM mass
 color_baseline = cmap(0)  # Baseline model
 color_latest = cmap(1)  # Latest model
 
 
-fig, ax = plt.subplots(5, 2, figsize=(10, 9.0), dpi=300)
-fig.subplots_adjust(hspace=0.2, wspace=0.2)
+fig, ax = plt.subplots(5, 2, figsize=(10, 10.7), dpi=300, sharex=True)
+fig.subplots_adjust(hspace=0.42, wspace=0.2)
 ax = ax.flatten()
 
 
 # make a inset panel to take its place
-ax0 = ax[0].inset_axes([0, -1, 1, 2])
-
+ax0 = ax[0].inset_axes([0, -1.45, 1, 2.45])
 
 ax0.fill_between(
     10**loghm,
@@ -562,7 +516,7 @@ ax0.plot(
     ls="--",
 )
 ax0.legend(
-    loc="lower center", ncol=3, frameon=False, fontsize=10, bbox_to_anchor=(0.5, 1.01)
+    loc="upper center", ncol=3, frameon=False, fontsize=10
 )
 ax0.set(
     xlabel=r"$M_{\rm halo}$ [M$_\odot$]",
@@ -589,22 +543,37 @@ ax0.text(
 # all the baseline models are dashed
 ax[4].plot(results_latest["t"], results_latest["m_star"], color=color_latest, lw=3)
 ax[4].plot(results["t"], results["m_star"], color=color_baseline, lw=3, ls="--")
-
 ax[4].set(
-    ylabel=r"$\rm M_{\star} ~ [{\rm M_{\odot}}]$",
+    ylabel=r"$ M_{\star} ~ [{\rm M_{\odot}}]$",
     yscale="log",
     ylim=(2e6, None),
-    xlim=(results["t"][0] * 0.99, results["t"][-1]),
+    xlim=(0.25, results["t"][-1]),
+    
 )
+# make an inset to plot the fractional difference
+ax4 = ax[4].inset_axes([0, -0.3, 1, 0.3])
+ax4.plot(results_latest["t"], (results_latest["m_star"] - results["m_star"]) / results["m_star"], color=color_cgm , lw=1.5)
+ax4.set( xlim=(0.25, results["t"][-1]), ylim=(-1.1, 1.1), xscale="log")
+ax4.axhline(0, color="k", lw=0.5, ls=":")
+ax4.set_ylabel(ylabel="frac. diff", fontsize=9)
+#remove tick labels for x axis
+ax4.set_xticklabels([])
+
 
 ax[6].plot(results_latest["t"], results_latest["m_ism"], color=color_latest, lw=3)
 ax[6].plot(results["t"], results["m_gas"], color=color_baseline, lw=3, ls="--")
 ax[6].set(
-    ylabel=r"$\rm M_{\rm ISM} ~ [{\rm M_{\odot}}]$",
+    ylabel=r"$ M_{\rm ISM} ~ [{\rm M_{\odot}}]$",
     yscale="log",
     ylim=(2e6, None),
-    xlim=(results["t"][0] * 0.99, results["t"][-1]),
+    xlim=(0.25, results["t"][-1]),
 )
+ax6 = ax[6].inset_axes([0, -0.3, 1, 0.3])
+ax6.plot(results_latest["t"], (results_latest["m_ism"] - results["m_gas"]) / results["m_gas"], color=color_cgm  , lw=1.5)
+ax6.set( xlim=(0.25, results["t"][-1]), ylim=(-1.1, 1.1), xscale="log")
+ax6.axhline(0, color="k", lw=0.5, ls=":")
+ax6.set_ylabel(ylabel="frac. diff", fontsize=9)
+ax6.set_xticklabels([])
 
 ax[8].plot(
     results_latest["t"],
@@ -614,12 +583,20 @@ ax[8].plot(
 )
 ax[8].plot(results["t"], results["m_cgm"], color=color_baseline, lw=3, ls="--")
 ax[8].set(
-    ylabel=r"$\rm M_{\rm CGM} ~ [{\rm M_{\odot}}]$",
+    ylabel=r"$ M_{\rm CGM} ~ [{\rm M_{\odot}}]$",
     yscale="log",
     ylim=(2e6, None),
-    xlim=(results["t"][0] * 0.99, results["t"][-1]),
-    xlabel=r"$t_{\rm univ}$ [Gyr]",
+    xlim=(0.25, results["t"][-1]),
+
 )
+ax8 = ax[8].inset_axes([0, -0.3, 1, 0.3])
+ax8.plot(results_latest["t"], (results_latest["m_cgm"] - results["m_cgm"]) / results["m_cgm"], color=color_cgm , lw=1.5)
+ax8.set( xlim=(0.25, results["t"][-1]), ylim=(-1.1, 1.1), xscale="log")
+ax8.axhline(0, color="k", lw=0.5, ls=":")
+ax8.set_ylabel(ylabel="frac. diff", fontsize=9)
+ax8.set_xlabel(r"$t_{\rm univ}$ [Gyr]")
+
+
 # show the cool and hot CGM phases
 ax[8].plot(
     results_latest["t"],
@@ -645,20 +622,32 @@ ax[1].set(
     ylabel=r"total $E_{\rm CGM}$",
     yscale="log",
     ylim=(2e54, 6e58),
-    xlim=(results["t"][0] * 0.99, results["t"][-1]),
+    xlim=(0.25, results["t"][-1]),
 )
+ax1 = ax[1].inset_axes([0, -0.3, 1, 0.3])
+ax1.plot(results_latest["t"], (results_latest["egy_cgm"] - results["egy_cgm"]) / results["egy_cgm"], color=color_cgm , lw=1.5)
+ax1.set( xlim=(0.25, results["t"][-1]), ylim=(-1.1, 1.1), xscale="log")
+ax1.axhline(0, color="k", lw=0.5, ls=":")
+ax1.set_ylabel(ylabel="frac. diff", fontsize=9)
+ax1.set_xticklabels([])
+
 # SNE winds energy
 ax[3].plot(
     results_latest["t"], results_latest["egy_ism_wind"], color=color_latest, lw=3
 )
 ax[3].plot(results["t"], results["egy_ism_wind"], color=color_baseline, lw=3, ls="--")
-
 ax[3].set(
     ylabel=r"$E_{\rm SNe, wind}$",
     yscale="log",
     ylim=(2e54, 6e58),
-    xlim=(results["t"][0] * 0.99, results["t"][-1]),
+    xlim=(0.25, results["t"][-1]),
 )
+ax3 = ax[3].inset_axes([0, -0.3, 1, 0.3])
+ax3.plot(results_latest["t"], (results_latest["egy_ism_wind"] - results["egy_ism_wind"]) / results["egy_ism_wind"], color=color_cgm  , lw=1.5)
+ax3.set( xlim=(0.25, results["t"][-1]), ylim=(-1.1, 1.1), xscale="log")
+ax3.axhline(0, color="k", lw=0.5, ls=":")
+ax3.set_ylabel(ylabel="frac. diff", fontsize=9)
+ax3.set_xticklabels([])
 
 # cooling
 ax[5].plot(results_latest["t"], results_latest["egy_radloss"], color=color_latest, lw=3)
@@ -667,8 +656,14 @@ ax[5].set(
     ylabel=r"$E_{\rm CGM, cool}$",
     yscale="log",
     ylim=(2e54, 6e58),
-    xlim=(results["t"][0] * 0.99, results["t"][-1]),
+    xlim=(0.25, results["t"][-1]),
 )
+ax5 = ax[5].inset_axes([0, -0.3, 1, 0.3])
+ax5.plot(results_latest["t"], (results_latest["egy_radloss"] - results["egy_radloss"]) / results["egy_radloss"], color=color_cgm  , lw=1.5)
+ax5.set( xlim=(0.25, results["t"][-1]), ylim=(-1.1, 1.1), xscale="log")
+ax5.axhline(0, color="k", lw=0.5, ls=":")
+ax5.set_ylabel(ylabel="frac. diff", fontsize=9)
+ax5.set_xticklabels([]) 
 
 # ejecting
 ax[7].plot(results_latest["t"], results_latest["egy_eject"], color=color_latest, lw=3)
@@ -677,8 +672,14 @@ ax[7].set(
     ylabel=r"$E_{\rm CGM, ej}$",
     yscale="log",
     ylim=(2e54, 6e58),
-    xlim=(results["t"][0] * 0.99, results["t"][-1]),
+    xlim=(0.25, results["t"][-1]),
 )
+ax7 = ax[7].inset_axes([0, -0.3, 1, 0.3])
+ax7.plot(results_latest["t"], (results_latest["egy_eject"] - results["egy_eject"]) / results["egy_eject"], color=color_cgm , lw=1.5)
+ax7.set( xlim=(0.25, results["t"][-1]), ylim=(-1.1, 1.1), xscale="log")
+ax7.axhline(0, color="k", lw=0.5, ls=":")
+ax7.set_ylabel(ylabel="frac. diff", fontsize=9)
+ax7.set_xticklabels([])
 
 # accreting
 ax[9].plot(results_latest["t"], results_latest["egy_accrete"], color=color_latest, lw=3)
@@ -688,9 +689,15 @@ ax[9].set(
     yscale="log",
     ylim=(2e54, 6e58),
     xlim=(0.25, results["t"][-1]),
-    xlabel=r"$t_{\rm univ}$ [Gyr]",
+
     xscale="log",
 )
+ax9 = ax[9].inset_axes([0, -0.3, 1, 0.3])
+ax9.plot(results_latest["t"], (results_latest["egy_accrete"] - results["egy_accrete"]) / results["egy_accrete"], color=color_cgm , lw=1.5)
+ax9.set( xlim=(0.25, results["t"][-1]), ylim=(-1.1, 1.1), xscale="log")
+ax9.axhline(0, color="k", lw=0.5, ls=":")
+ax9.set_ylabel(ylabel="frac. diff", fontsize=9)
+ax9.set_xlabel(r"$t_{\rm univ}$ [Gyr]")
 
 # Apply the same settings to all relevant axes except ax[0] and ax[2] (which are turned off)
 for i in range(len(ax)):
@@ -706,7 +713,7 @@ for i in range(len(ax)):
 # get the current x axis labels of the first row and their
 # Get more ticks for the twin axis by interpolating between min and max time
 # Choose exact ticks for time axis (in Gyr) and corresponding redshifts
-t_ticks = np.array([0.3, 0.5, 1, 2, 4, 8, results["t"][-1]])
+t_ticks = np.array([0.3, 0.5, 1, 2, 4, 10, ])
 z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
 
 for i, a in enumerate(ax):
@@ -718,8 +725,8 @@ for i, a in enumerate(ax):
     ax2.set(xscale="log", xlim=(0.25, results["t"][-1]))
     if i == 1:
         ax2.set_xticks(t_ticks)
-        ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
-        ax2.set_xlabel(r"$z$")
+        ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks], fontsize=9)
+        ax2.set_xlabel(r"$z$", fontsize=9)
     else:
         ax2.set_xticks(t_ticks)
         ax2.set_xticklabels([])

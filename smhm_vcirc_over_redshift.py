@@ -13,7 +13,7 @@ import astropy.units as u
 from tqdm import tqdm
 from scipy.interpolate import RegularGridInterpolator
 from astropy.table import Table, join, hstack, vstack
-from cgm_sf_regulator import CGMRegulator, mhalo_at_z0, halo_diagnostics_v2
+from cgm_sf_regulator import CGMRegulator, halo_diagnostics_v2
 from cgm_sf_regulator_baseline import CGMRegulatorBaseline
 from astropy.units import Quantity
 from run_grids_of_models import (
@@ -211,7 +211,7 @@ models_label ="C23 model"
 
 #%%
 # write to file
-file = "./runs/smhm_2phase_redshift_scan_KS_kap0p1_rd_0p02_wSFRandZ.h5"
+file = "./runs/smhm_2phase_redshift_scan_updated_cooling.h5"
 
 if not os.path.exists(file):
     redshift_variation, zsims = run_2phase_model_redshift_grid(

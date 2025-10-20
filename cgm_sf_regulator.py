@@ -12,6 +12,7 @@ from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 from regulator_lib.cooling_fn_generator import cooling_fn_generator
 import astropy.constants as consts
 import astropy.units as u
+import warnings
 
 from tqdm import tqdm
 
@@ -19,16 +20,7 @@ from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 from scipy.interpolate import RegularGridInterpolator
 
-# standard flat cosmology
-H0 = 70
-h = 0.7
-Omegam0 = 0.3
-Omegade0 = 0.7
-Ob0 = 0.0490
-f_baryon = Ob0 / Omegam0  # universal baryon fraction
-LCDM = cosmology.LambdaCDM(H0=H0, Om0=Omegam0, Ode0=Omegade0)
-
-
+# defined some customization
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 plt.rcParams.update(
     {
@@ -52,7 +44,17 @@ plt.rcParams.update(
     }
 )
 
+# standard flat cosmology
+H0 = 70
+h = 0.7
+Omegam0 = 0.3
+Omegade0 = 0.7
+Ob0 = 0.0490
+f_baryon = Ob0 / Omegam0  # universal baryon fraction
+LCDM = cosmology.LambdaCDM(H0=H0, Om0=Omegam0, Ode0=Omegade0)
 
+
+# %%
 class CoolingFunctionInterpolator:
     def __init__(self, file_path):
         self.file_path = file_path
@@ -87,8 +89,104 @@ class CoolingFunctionInterpolator:
         return 10**log_lambda
 
 
-# interpolator = CoolingFunctionInterpolator("./tables/newcool_viraj.dat")
-# lambda_value = interpolator.cooling_function(1e4, 0.7)
+class WiersamaCooling:
+    def __init__(self, table_path="./tables/Lambda_tab_redshifts.npz"):
+        # Load cooling table
+        self.cooling_table = np.load(table_path)
+
+        # Build interpolator once
+        points = (
+            self.cooling_table["log_nHbins"],
+            self.cooling_table["log_Tbins"],
+            self.cooling_table["Zs"],
+            self.cooling_table["redshifts"],
+        )
+        self.interp = RegularGridInterpolator(
+            points,
+            self.cooling_table["Lambda_tab"],
+            bounds_error=False,
+            fill_value=None,
+        )
+
+        # Store bounds for clipping
+        self.bounds = {
+            "log_T": (
+                self.cooling_table["log_Tbins"].min(),
+                self.cooling_table["log_Tbins"].max(),
+            ),
+            "log_nH": (
+                self.cooling_table["log_nHbins"].min(),
+                self.cooling_table["log_nHbins"].max(),
+            ),
+            "Z": (
+                self.cooling_table["Zs"].min(),
+                self.cooling_table["Zs"].max(),
+            ),
+            "z": (
+                self.cooling_table["redshifts"].min(),
+                self.cooling_table["redshifts"].max(),
+            ),
+        }
+        print("Cooling table bounds:")
+        for key, val in self.bounds.items():
+            print(f"  {key}: {val}")
+
+    def __call__(self, density, temperature, metallicity, redshift):
+        """Evaluate cooling function at given state."""
+        # round the metallicity and temperature to 0.0001
+        input_metallicity = np.round(metallicity, 4)
+        input_temperature = np.round(temperature, 0)
+
+        input_log_T = np.log10(input_temperature)
+        input_log_nH = np.log10(density)
+        print("_______________")
+        print(
+            "**** log_nH={:.2e}, log_T={:.2e}, metallicity={:.2e}, redshift={:.2f}".format(
+                input_log_nH, input_log_T, input_metallicity, redshift
+            )
+        )
+
+        # Clip to table range
+        log_T = np.clip(input_log_T, *self.bounds["log_T"])
+        metallicity = np.clip(input_metallicity, 0, self.bounds["Z"][1])
+        log_nH = np.clip(input_log_nH, *self.bounds["log_nH"])
+        z = np.clip(redshift, *self.bounds["z"])
+
+        # Check for clipping
+        if input_log_T != log_T:
+            print(f"clipping log_T: input={input_log_T:.3e}, clipped={log_T:.3e}")
+        if input_metallicity != metallicity:
+
+            print(
+                f"clipping metallicity: input={input_metallicity:.3e}, clipped={metallicity:.3e}"
+            )
+        if log_nH != input_log_nH:
+            print(f"clipping log_nH: input={input_log_nH:.3e}, clipped={log_nH:.3e}")
+        if z != redshift:
+            print(f"clipping redshift: input={redshift:.3f}, clipped={z:.3f}")
+
+        # interpolate
+        Lambda = self.interp((log_nH, log_T, metallicity, z))
+
+        if np.isnan(Lambda):
+            raise ValueError(
+                f"Cooling function is NaN at "
+                f"(log_nH={log_nH}, log_T={log_T}, Z={metallicity}, z={z})"
+            )
+
+        return Lambda
+
+
+# %%test out the Weirsama cooling
+cooling_fn = WiersamaCooling()
+density = 1e-4
+temperature = 1e4
+metallicity = 1
+redshift = 10
+cooling_lambda = cooling_fn(density, temperature, metallicity, redshift)
+print("lambda: ergs/s cm^3", cooling_lambda)
+
+# %%
 
 
 def custom_mass_loading(mhalo, A=10, alpha=-1.4):
@@ -289,6 +387,7 @@ def halo_mass_growth_fakhouri(t, mass):
 
     return mhalo_dot
 
+
 def halo_mass_growth_dekel(t, mass):
     """
     # Halo mass evolution called by initial_mhalo to
@@ -337,6 +436,7 @@ def mhalo_at_z0_fakhouri(mhalo_at_z, z_obs):
     sol_0 = solve_ivp(halo_mass_growth_dekel, time_interval, mass_initial)
     return sol_0.y[0][-1]  # return the last value of the solution
 
+
 def energy_gain(eta_e, mstar_dot):
     """energy associated with SN-powered galactic winds,
     Carr 2023 Eq 17
@@ -361,7 +461,7 @@ def energy_loss(Lamb, Rvir, r1, rho0, mu, alpha):
         Lamb (_type_): cooling function
         Rvir (_type_): virial radius
         r1 (_type_): characteristic radius
-        rho0 (_type_): central density of the CGM 
+        rho0 (_type_): central density of the CGM
 
     Returns:
         _type_: _description_
@@ -371,12 +471,12 @@ def energy_loss(Lamb, Rvir, r1, rho0, mu, alpha):
         * (Lamb)
         * (((Rvir / r1) ** (3 - 2 * alpha) - 1) / (3 - 2 * alpha))
     )
-    if rad_loss < 0:
-        print("Negative radiative", Lamb, rho0, mu, r1, Rvir, alpha)
+    # if rad_loss < 0:
+    #     print("Negative radiative", Lamb, rho0, mu, r1, Rvir, alpha)
     return rad_loss
 
 
-def halo_mass_evol(t, mass):
+def halo_mass_evol_fakhouri(t, mass):
     """
     # Halo mass evolution called by
     # initial_mhalo to estimate initial halo mass at arbitrary redshift
@@ -388,7 +488,19 @@ def halo_mass_evol(t, mass):
     return -mhalo_dot
 
 
-def initial_mhalo(mhalo_z0, time_interval):
+def halo_mass_evol_dekel(t, mass):
+    """
+    # Halo mass evolution called by
+    # initial_mhalo to estimate initial halo mass at arbitrary redshift
+    """
+    mhalo = mass * u.solMass
+    #    z = np.sqrt((28/t) - 1) - 1 # cosmological redshift
+    z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
+    mhalo_dot = halo_infall_dekel(z, mhalo)
+    return -mhalo_dot
+
+
+def initial_mhalo_fakhouri(mhalo_z0, time_interval):
     """finds initial halo mass at the left edge of the time interval
 
     Args:
@@ -402,7 +514,25 @@ def initial_mhalo(mhalo_z0, time_interval):
     mass_initial = np.array([mhalo_z0.value])
     time_at_z0 = LCDM.age(0.001).value
     time_interval = (time_interval[0], time_at_z0)
-    sol_0 = solve_ivp(halo_mass_evol, time_interval, mass_initial)
+    sol_0 = solve_ivp(halo_mass_evol_fakhouri, time_interval, mass_initial)
+    return sol_0.y[0][-1]  # return the last value of the solution
+
+
+def initial_mhalo_dekel(mhalo_z0, time_interval):
+    """finds initial halo mass at the left edge of the time interval
+
+    Args:
+        mhalo_z0 (_type_): _description_
+        time_interval (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    mass_initial = np.array([mhalo_z0.value])
+    time_at_z0 = LCDM.age(0.001).value
+    time_interval = (time_interval[0], time_at_z0)
+    sol_0 = solve_ivp(halo_mass_evol_dekel, time_interval, mass_initial)
     return sol_0.y[0][-1]  # return the last value of the solution
 
 
@@ -600,12 +730,12 @@ class CGMRegulator:
         time_interval,
         tstep=1,
         eta_z=0.3,
-        verbose=False,
+        verbose=True,
         dep_time_norm=0.4,
         cooling_dynamic_time_norm=1,
         disk_scale_length=0.02,
         KS_n=1.5,
-        KS_kappa_s=1,
+        KS_kappa_s=0.1,
         r_bulge=1,
         # ep_bh_radeff=0.1,
         # ep_bh_feedback_eff=0.02,
@@ -617,9 +747,11 @@ class CGMRegulator:
         updated_loadings=True,
         updated_2phase_CGM=True,
         updated_SF_law=True,
-        
-    ): 
-        #fmt: off  
+        add_f_prevent=True,
+        alpha_m=0.1,
+        alpha_e=0.1,
+    ):
+        # fmt: off
         self.mhalo_z0 = mhalo_z0 # the mass of the halo we want to run to z=0
         self.verbose = verbose # extra printout
         self.time_interval = time_interval # simulation time in Gyr
@@ -660,6 +792,10 @@ class CGMRegulator:
         self.ks_n = KS_n
         self.ks_kappa_s = KS_kappa_s
         self.r_bulge = r_bulge  # kpc
+        
+        # feedback loadings
+        self.eta_M = alpha_m
+        self.eta_E = alpha_e
 
         # self.cooling_fn = cooling_fn_generator(
         #     "./tables/Lambda_tab_redshifts.npz"
@@ -674,6 +810,7 @@ class CGMRegulator:
         
         # cooling table
         self.cooling_fn = CoolingFunctionInterpolator("./tables/newcool_viraj.dat")
+        # self.cooling_fn = WiersamaCooling("./tables/Lambda_tab_redshifts.npz")
 
         self.zinit = cosmology.z_at_value(LCDM.age, time_interval[0] * u.Gyr)
         self.zfinal = cosmology.z_at_value(LCDM.age, time_interval[1] * u.Gyr)
@@ -690,8 +827,9 @@ class CGMRegulator:
         
         # dbug, temporary parms
         self.dbug_norm_for_accretion_energy_rate = dbug_norm_for_accretion_energy_rate
-        #fmt: on
-        
+        self.add_f_prevent = add_f_prevent
+        # fmt: on
+
     def mass_evolution(self, t, mass, ode_mode=True):
         """Ode to solve the mass evolution of the galaxy
 
@@ -718,7 +856,7 @@ class CGMRegulator:
         e_cgm_out = mass[9] * u.erg         # Energy loss from mass ejected from the CGM into IGM
         e_cgm_in = mass[10] * u.erg         # Energy gained from mass accretion from the IGM
         e_cgm = mass[11] * u.erg            # Total CGM energy
-        
+
         # m_bh = mass[12] * u.solMass        # Total black hole mass
         # fmt: on
 
@@ -730,8 +868,8 @@ class CGMRegulator:
 
         # mass and energy loading
         if self.updated_loadings:
-            self.eta_m = vcirc_mass_loading(halo_vcirc, alpha_m=0.1)
-            self.eta_e = vcirc_energy_loading(halo_vcirc, alpha_e=0.1)
+            self.eta_m = vcirc_mass_loading(halo_vcirc, alpha_m=self.eta_M)
+            self.eta_e = vcirc_energy_loading(halo_vcirc, alpha_e=self.eta_E)
         else:
             self.eta_m = custom_mass_loading(m_halo, A=10, alpha=-0.7)
             self.eta_e = custom_energy_loading(m_halo, A=0.1, alpha=-0.4)
@@ -742,43 +880,45 @@ class CGMRegulator:
         # e_cgm_hot ~ e_cgm
         cgm_temp = ((e_cgm / m_cgm_hot) * (self.mu / self.kb)).to(u.K)
 
-        t_dynamical = t_ff(halo_rvir, halo_rvir, m_halo).to(u.Gyr) # dynamical time at halo rvir
+        t_dynamical = t_ff(halo_rvir, halo_rvir, m_halo).to(
+            u.Gyr
+        )  # dynamical time at halo rvir
 
         # rho_crit = LCDM.critical_density(z)
         cgm_metallicity = m_metals / m_cgm  # spread out over the CGM
         cgm_metallicity_sol = cgm_metallicity / self.Z_sol
+        # print(m_cgm)
 
-        ## cooling functions value at this timestep
-        
-        # Weirsama cooling
-        # cooling_lambda = self.cooling_fn(
-        #     (-4, np.log10(halo_vir_temp.value), cgm_metallicity_sol, 0)
-        # ) * (u.erg * u.cm**3 * u.s**-1)
-        
-        # basic cooling, to z dependence
+        ##### cooling functions value at this timeste
+        # basic cooling, only temp and Z, from Viraj
         cooling_lambda = self.cooling_fn.cooling_function(
             cgm_temp.value, cgm_metallicity_sol
         ) * (u.erg * u.cm**3 * u.s**-1)
 
-        if cooling_lambda < 0:
-            print("cooling_lambda", cooling_lambda)
-            cooling_lambda = 0 * (u.erg * u.cm**3 * u.s**-1)
-            # raise ValueError("Negative cooling_lambda")
-
         # compute density normalization for power-law density model from CGM mass
         # using the m_cgm_hot instead of intire mass, lower density
         rho0 = density0(mCGM=m_cgm_hot, r0=r1, Rvir=halo_rvir, alpha=self.alpha)
+        nh_0 = (rho0 / self.mu).to(1 / u.cm**3)  # central number density in 1/cm^3
+        # WiersamaCooling
+        # cooling_lambda = self.cooling_fn(
+        #     1e-4, cgm_temp.value, cgm_metallicity_sol, z
+        # ) * (u.erg * u.cm**3 * u.s**-1)
+
+        # if cooling_lambda < 0:
+        #     print("cooling_lambda {:<.3e}".format(cooling_lambda))
+        # cooling_lambda = 0 * (u.erg * u.cm**3 * u.s**-1)
+        # raise ValueError("Negative cooling_lambda")
 
         # estimate energy ejection loss timescale and limitit to dynamical time
         # c_sound = np.sqrt(e_cgm / m_cgm)  # approximate sound speed
         c_sound = np.sqrt(e_cgm / m_cgm_hot)
         t_ejection = (halo_rvir / c_sound).to(u.Gyr)  # ejection time of hot gas
-        
+
         t_ejection = min(
             max(t_ejection.value, self.t_eject_lim_norm * t_dynamical.value),
             t_dynamical.value,
-        )  
-        t_ejection = t_ejection * u.Gyr # limited, guess needs to be callibrated
+        )
+        t_ejection = t_ejection * u.Gyr  # limited, guess needs to be callibrated
 
         # m_cgm_hot is used-- energy excess, how much there would be if the gas was at Tvir
         dot_e_cgm_out = (
@@ -796,6 +936,7 @@ class CGMRegulator:
             alpha=self.alpha,
         ).to(u.erg / u.Gyr)
         # print(rho0)
+
         #####  new galaxy profile
         # mcgm_and_ism = m_cgm + m_ism
         # Mbaryon = m_cgm + m_ism + m_star
@@ -807,8 +948,6 @@ class CGMRegulator:
         #     args=(total_Mgas, Mbaryon, m_halo, z, cgm_temp.value, cooling_lambda, 200),
         # ) * (u.erg / u.s)
         # ### end new profile
-        # ### print("cooling", dot_e_cgm_cool, dot_e_cgm_cool_new.to(u.erg / u.Gyr))
-        # dot_e_cgm_hot_loss = dot_e_cgm_cool_new.to(u.erg / u.Gyr)
 
         # using the effective temp of CGM, get the effective energy, using only the hot gas
         cgm_specific_e = self.cgm_ejecti_specific_energy_ratio * max(
@@ -817,6 +956,9 @@ class CGMRegulator:
         # (effective) cooling time of CGM, specific energy is the energy per unit mass
         tcool = (cgm_specific_e / dot_e_cgm_hot_loss) * m_cgm_hot
         tcool_real = tcool.to(u.Gyr)
+
+        # if tcool_real < 0:
+        #     tcool_real =    (1 / LCDM.H(z=z)).to(u.Gyr) # if negative, set to dynamical time
 
         # XXX: include Compton cooling?
 
@@ -828,21 +970,28 @@ class CGMRegulator:
         # CGM hot gas mass loss due to cooling, 2 phase
         dot_m_cgm_hot_cooling = (m_cgm_hot / tcool_real).to(u.solMass / u.Gyr)
         dot_m_cgm_cold_falling = (m_cgm_cold / t_dynamical).to(u.solMass / u.Gyr)
-        
+
         # star formation rate using sigma, KS law, adopted 	arXiv:2309.07957 Vallini
         r_disk = self.disk_scale * halo_rvir.value  # kpc
 
         sigma0 = m_ism.value / (2 * np.pi * r_disk**2)  # msun / kpc^2
         Asfr = 1e-12 * self.ks_kappa_s * 1e9  # msun / Gyr / kpc^2
+
+        # print all relevant vars for dot_m_star
+        if self.verbose:
+            print(
+                f"dot_m_star inputs: Asfr={Asfr:.3e}, sigma0={sigma0:.3e}, ks_n={self.ks_n:.3e}, r_disk={r_disk:.3e}, m_ism={m_ism.value:.3e}"
+            )
+
         dot_m_star = (
             Asfr * sigma0**self.ks_n * (2 * np.pi * r_disk**2) / self.ks_n**2
         )  # msun / Gyr
 
         if self.updated_SF_law:
-            dot_m_sfr = dot_m_star * (u.solMass / u.Gyr) # new SFR
+            dot_m_sfr = dot_m_star * (u.solMass / u.Gyr)  # new SFR
         else:
             t_depletion = depletion_time(z, m_star, self.exp, self.dep_time_norm)
-            dot_m_star= m_ism / t_depletion
+            dot_m_star = m_ism / t_depletion
             dot_m_sfr = dot_m_star.to(u.solMass / u.Gyr)  # old SFR
 
         dot_m_bulge = (2 * np.pi * Asfr * sigma0**self.ks_n) / self.ks_n**2
@@ -851,14 +1000,14 @@ class CGMRegulator:
         )
         # star formation within 1 kpc (r_bulge, the actual definition of bulge mass is different)
         dot_mstar_central = dot_m_bulge * (u.solMass / u.Gyr)  # msun / Gyr
-       
+
         # total ISM mass rate of change
         dot_m_ism = (dot_m_cgm_cold_falling - dot_m_sfr * (1 + self.eta_m)).to(
             u.solMass / u.Gyr
         )
         # star formation rate, as above
         dot_m_sfr = dot_m_sfr.to(u.solMass / u.Gyr)
-        # halo inflall rate
+
         if self.updated_halo_infall:
             dot_m_halo = halo_infall_fakhouri(z, m_halo)
         else:
@@ -876,20 +1025,23 @@ class CGMRegulator:
         e_ejection_to_infall_ratio = self.cgm_infall_prevention_const * (
             dot_energy_from_infall / dot_e_cgm_out
         )
-        f_prevent = min(max(e_ejection_to_infall_ratio, 0.1), 1.0)  # 0.1 < f < 1
-        dot_m_cgm_in *= f_prevent
 
-        if self.verbose:
-            print(
-                f"dot_m_cgm_in: {dot_m_cgm_in:.2e}, f_prevent: {f_prevent:.2e}, -dot_e_cgm_out: {dot_e_cgm_out:.2e}, -dot_energy_from_infall: {dot_energy_from_infall:.2e}, -e_ejection_to_infall_ratio: {e_ejection_to_infall_ratio:.2e}, --max_ratio: {max(e_ejection_to_infall_ratio, 0.1):.2e}"
-            )
+        if self.add_f_prevent:
+            f_prevent = min(
+                max(e_ejection_to_infall_ratio, self.add_f_prevent), 1.0
+            )  # 0.1 < f < 1
+            # f_prevent = np.min
+        else:
+            f_prevent = 1.0
+
+        dot_m_cgm_in *= f_prevent
 
         ##################### BH routines
         # c_s = np.sqrt(self.kb * cgm_temp / self.mu).to(u.km / u.s)
         # rho_0_hot = rho0 # can relax this assumption maybe, cuspy?
         # dot_m_bh_bondi = (4 * np.pi * self.G**2 * rho_0_hot * m_bh**2) / c_s**3
         # dot_m_bh_bondi = self.bondi_boost * dot_m_bh_bondi.to(u.solMass / u.Gyr)
-        
+
         # # find the gas the BH accretion kernel by integrating the profile to r_grav_physical, analytical solution
         # m_gas_in_bh_disk = (
         #     2
@@ -901,7 +1053,7 @@ class CGMRegulator:
         #         * np.exp(-self.r_grav_physical / r_disk)
         #     )
         # )
-       
+
         # # bulge definition needed for tla accretion
         # effective_bulge_mass = np.max([m_bulge.value - (np.pi * 1e9), 0])
         # m_star_in_bh_disk  = m_bulge.value - effective_bulge_mass
@@ -934,15 +1086,35 @@ class CGMRegulator:
         ##################### BH routines end
 
         # energy input from SF
+        if self.verbose:
+            print("dot_m_sfr {:.3e}".format(dot_m_sfr))
+            print(
+                f"At z={z:.2f}, m_halo={m_halo:.3e}, dot_m_halo={dot_m_halo:.3e}, f_prevent={f_prevent:.3f}"
+            )
+            print(
+                f"m_ism={m_ism:.3e}, m_star={m_star:.3e}, m_bulge={m_bulge:.3e}, m_cgm_hot={m_cgm_hot:.3e}, m_cgm_cold={m_cgm_cold:.3e}, m_metals={m_metals:.3e}"
+            )
+            print(
+                f"e_ism_wind={e_ism_wind:.3e}, e_cgm_cool={e_cgm_cool:.3e}, e_cgm_out={e_cgm_out:.3e}, e_cgm_in={e_cgm_in:.3e}, e_cgm={e_cgm:.3e}"
+            )
+            print(
+                f"dot_m_ism={dot_m_ism:.3e}, dot_m_sfr={dot_m_sfr:.3e}, dot_m_bulge={dot_m_bulge:.3e}"
+            )
+            print(
+                f"dot_e_cgm_out={dot_e_cgm_out:.3e}, dot_e_cgm_hot_loss={dot_e_cgm_hot_loss:.3e}, dot_e_cgm_in={dot_e_cgm_in:.3e}, dot_e_cgm_cooling={dot_e_cgm_cooling:.3e}"
+            )
+            # print(f"dot_m_bh={dot_m_bh:.3e}, dot_e_bh_thermfeedback={dot_e_bh_thermfeedback:.3e}")
+
         dot_e_ism_wind = energy_gain(self.eta_e, dot_m_sfr)
         # energy due to accretion, eq 16
-        dot_e_cgm_in = self.dbug_norm_for_accretion_energy_rate *  f_prevent * (
-            self.kb * halo_vir_temp / self.mu * dot_m_cgm_in
-        ).to(u.erg * u.Gyr**-1)
+        dot_e_cgm_in = (self.kb * halo_vir_temp / self.mu * dot_m_cgm_in).to(
+            u.erg * u.Gyr**-1
+        )  # dot_m_cgm_in has the f_prvent already
         # CGM feedback gain term, eq 9
         dot_m_ism_wind = dot_m_sfr * self.eta_m
 
         ####  main derivatives
+
         dot_m_cgm_hot = (
             dot_m_cgm_in + dot_m_ism_wind - dot_m_cgm_hot_cooling - dot_m_cgm_out
         )
@@ -951,80 +1123,70 @@ class CGMRegulator:
 
         dot_e_cgm = (
             dot_e_ism_wind
-            + 1 * dot_e_cgm_in
+            + self.dbug_norm_for_accretion_energy_rate * dot_e_cgm_in
             - dot_e_cgm_out
             - 1 * dot_e_cgm_hot_loss
-            # + dot_e_bh_thermfeedback 
+            # + dot_e_bh_thermfeedback
         )
         dot_m_metal = (
             self.metal_yield * self.eta_z * dot_m_sfr
             + self.Z_IGM * self.Z_sol * dot_m_cgm_in
-            - cgm_metallicity * (dot_m_cgm_hot_cooling + dot_m_cgm_out)
+            - cgm_metallicity * dot_m_cgm_hot_cooling
+            - cgm_metallicity * dot_m_cgm_out
         )
+
+        # see if dot_m_cgm_hot is nan
+        # if np.isnan(dot_m_cgm_hot.value):
+        #     raise ValueError("dot_m_cgm_hot is nan", dot_m_cgm_hot)
 
         ##TODO: set mdot to 0 smoothly, instead of hard limit
         if (m_cgm_hot.value < 5e3) & (dot_m_cgm_hot.value < 0):
             # print("dot_m_cgm_hot < 0, correcting", dot_m_cgm_hot)
             dot_m_cgm_hot *= max((m_cgm_hot.value - 5e3) / 5e3, 0)
-
-        if self.verbose:
-            print(" ")
-            print("**time", t, "z", z)
-            if dot_m_cgm_cold_falling < dot_m_sfr:
-                print(
-                    "dot_m_cgm_cold_falling < dot_m_sfr",
-                    dot_m_cgm_cold_falling,
-                    dot_m_sfr,
-                )
-            print("> m_ism, m_star, m_cgm_hot, m_metals, m_halo")
-            print(
-                ">>  {:.2e} {:.2e} {:.2e} {:.2e} {:.2e}".format(
-                    m_ism, m_star, m_cgm_hot, m_metals, m_halo
-                )
-            )
-            print("> e_ism_wind, e_cgm_cool, e_cgm_out, e_cgm_in, e_cgm")
-            print(
-                ">>  {:.2e} {:.2e} {:.2e} {:.2e} {:.2e}".format(
-                    e_ism_wind, e_cgm_cool, e_cgm_out, e_cgm_in, e_cgm
-                )
-            )
-            print("pre limited ot_m_cgm_hot{:.2e}".format(dot_m_cgm_hot))
+            warnings.warn("dot_m_cgm_hot < 0, correcting")
+        if (m_cgm_cold.value < 5e3) & (dot_m_cgm_cold.value < 0):
+            # print("dot_m_cgm_cold < 0, correcting", dot_m_cgm_cold)
+            dot_m_cgm_cold *= max((m_cgm_cold.value - 5e3) / 5e3, 0)
+            warnings.warn("dot_m_cgm_cold < 0, correcting")
 
         halo_sfe = m_star / (m_halo * self.fb)
 
         if self.verbose:
-            # do some checks
-            print("mass of the CGM: {:.2e}".format(m_cgm_cold + m_cgm_hot))
-            print("post-limited dot_m_cgm_hot: {:.2e}".format(dot_m_cgm_hot))
-            print("dot m CGM in: {:.2e}".format(dot_m_cgm_in))
-            print("dot m ism wind: {:.2e}".format(dot_m_ism_wind))
-            print("dot m cgm cool: {:.2e}".format(dot_e_cgm_cooling))
-            print("dot m cgm out: {:.2e}".format(dot_m_cgm_out))
-            # print all timescales
-       
-            print("t_dynamical: {:.2e}".format(t_dynamical))
-          
-            print("t_ejection: {:.2e}".format(t_ejection))
-            print("t_ff: {:.2e}".format(t_ff(halo_rvir, halo_rvir, m_halo).to(u.Gyr)))
-            # print all the dot_ value
-            print("> dot_m_ism, dot_m_sfr, dot_m_cgm, dot_m_metal, dot_m_halo")
+
             print(
-                ">> {:.2e} {:.2e} {:.2e} {:.2e} {:.2e}".format(
-                    dot_m_ism, dot_m_sfr, dot_m_cgm_cold, dot_m_metal, dot_m_halo
-                )
+                f"dot_m_cgm_hot_cooling={dot_m_cgm_hot_cooling:.3e} (m_cgm_hot={m_cgm_hot:.3e}, tcool_real={tcool_real:.3e})"
             )
+            print(f"  tcool_real calculation:")
+            print(f"    cgm_specific_e={cgm_specific_e:.3e}")
+            print(f"    dot_e_cgm_hot_loss={dot_e_cgm_hot_loss:.3e}")
+
             print(
-                "> dot_e_ism_wind, dot_e_cgm_cool, dot_e_cgm_out, dot_e_cgm_in, dot_e_cgm"
+                f"dot_m_cgm_cold_falling={dot_m_cgm_cold_falling:.3e} (m_cgm_cold={m_cgm_cold:.3e}, t_dynamical={t_dynamical:.3e})"
             )
+
             print(
-                ">>  {:.2e} {:.2e} {:.2e} {:.2e} {:.2e}".format(
-                    dot_e_ism_wind,
-                    dot_e_cgm_cooling,
-                    dot_e_cgm_out,
-                    dot_e_cgm_in,
-                    dot_e_cgm,
-                )
+                f"*** m_cgm_hot={m_cgm_hot:.3e}, m_cgm_cold={m_cgm_cold:.3e}, t_dynamical={t_dynamical:.3e}"
             )
+            print(f"dot_m_cgm_hot={dot_m_cgm_hot:.3e}")
+            print("dot_m_cgm_hot is composed of:")
+            print(f"  dot_m_cgm_in         {dot_m_cgm_in:.3e}")
+            print(f"  dot_m_ism_wind       {dot_m_ism_wind:.3e}")
+            print(f"  dot_m_cgm_hot_cooling {dot_m_cgm_hot_cooling:.3e}")
+            print(f"    m_cgm_hot={m_cgm_hot:.3e}")
+            print(f"    tcool_real={tcool_real:.3e}")
+            print(f"    tcool_real is calculated from:")
+            print(f"        cgm_specific_e = {cgm_specific_e:.3e}")
+            print(
+                f"        dot_e_cgm_hot_loss (the integrand) = {dot_e_cgm_hot_loss:.3e}"
+            )
+            print(f"            Lamb={cooling_lambda:.3e}")
+            print(f"            Rvir={halo_rvir:.3e}")
+            print(f"            r1={r1:.3e}")
+            print(f"            rho0={rho0:.3e}")
+            print(f"            mu={self.mu:.3e}")
+            print(f"            alpha={self.alpha:.3e}")
+            print(f"  dot_m_cgm_hot_cooling = m_cgm_hot / tcool_real")
+            print(f"  dot_m_cgm_out        {dot_m_cgm_out:.3e}")
 
         # if dot_m_sfr is negative, stop
         # if m_ism < 0:
@@ -1049,7 +1211,7 @@ class CGMRegulator:
                 ]
             )
             return derivs
-        else: # derived quantities
+        else:  # derived quantities
             return np.array(
                 [
                     halo_vir_temp.value,
@@ -1072,7 +1234,7 @@ class CGMRegulator:
                     dot_mstar_central.value,
                     t_ejection.value,
                     cgm_temp.value,
-                    rho0.to(u.Msun / u.kpc**3).value
+                    rho0.to(u.Msun / u.kpc**3).value,
                     # dot_m_bh.value,
                     # dot_e_bh_thermfeedback.value,
                     # dot_m_bh_bondi.value,
@@ -1085,7 +1247,10 @@ class CGMRegulator:
 
     def run_halo(self):
         print("self.time_interval", self.time_interval, "tstep", self.tstep)
-        mhalo_t0 = initial_mhalo(self.mhalo_z0, self.time_interval)
+        if self.updated_halo_infall:
+            mhalo_t0 = initial_mhalo_fakhouri(self.mhalo_z0, self.time_interval)
+        else:
+            mhalo_t0 = initial_mhalo_dekel(self.mhalo_z0, self.time_interval)
 
         # mhalo_t0 = self.mhalo_init.value
         rvir = virial_radius(z=self.zfinal, mhalo=mhalo_t0 * u.solMass).to(u.kpc)
@@ -1113,7 +1278,6 @@ class CGMRegulator:
         e_cgm_out_0 = 1e3 * u.erg
         e_cgm_in_0 = 1e3 * u.erg
 
-        
         e_bh_feedback_0 = 0.0 * u.erg
         # initial conditions masses and energ
         initial_values = np.array(
@@ -1152,7 +1316,7 @@ class CGMRegulator:
             )
         )
 
-        if self.tstep != 1: # custom timesteping
+        if self.tstep != 1:  # custom timesteping
             t = self.evaluation_time_array
             solution = solve_ivp(
                 self.mass_evolution,
@@ -1162,11 +1326,12 @@ class CGMRegulator:
                 # rtol=1e-5,
                 t_eval=t,
             )
-        else: # automatice timesteping
+        else:  # automatice timesteping
             solution = solve_ivp(
                 self.mass_evolution,
                 self.time_interval,
                 initial_values,
+                # rtol=1e-5,
             )
 
         adaptive_tsteps = solution.t
@@ -1290,8 +1455,12 @@ class CGMRegulator:
             "dot_e_cgm_in": derived_quantities[:, 3],
             "dot_e_ism_wind": derived_quantities[:, 4],
             "dot_m_cgm_out": derived_quantities[:, 5],
-            "dot_m_cgm_hot": derived_quantities[:, 6],  # hot bucket that feeds the cold buckets
-            "dot_m_cgm_cold": derived_quantities[:, 7],  # cold bucket that feeds the ISM
+            "dot_m_cgm_hot": derived_quantities[
+                :, 6
+            ],  # hot bucket that feeds the cold buckets
+            "dot_m_cgm_cold": derived_quantities[
+                :, 7
+            ],  # cold bucket that feeds the ISM
             "dot_m_cgm_in": derived_quantities[:, 8],
             "dot_m_ism_wind": derived_quantities[:, 9],
             "f_prevent": derived_quantities[:, 10],
@@ -1304,7 +1473,7 @@ class CGMRegulator:
             "dot_mstar_central": derived_quantities[:, 17],
             "t_ejection": derived_quantities[:, 18],
             "cgm_temp": derived_quantities[:, 19],
-            "rho0": derived_quantities[:, 20]
+            "rho0": derived_quantities[:, 20],
             # "dot_m_bh": derived_quantities[:, 18],
             # "dot_e_bh_thermfeedback": derived_quantities[:, 19],
             # "dot_m_bh_bondi": derived_quantities[:, 20],
@@ -1510,7 +1679,9 @@ def halo_timescales(results, derived_quant, title: str):
             adaptive_z[-1].value,
             sci_notation_tex(mhalo_t[-1]),
             0,
-            sci_notation_tex(mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
+            sci_notation_tex(
+                mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])
+            ),
         )
     )
 
@@ -1699,7 +1870,9 @@ def halo_normalized_rates(results, derived_quant, title: str):
             adaptive_z[-1].value,
             sci_notation_tex(mhalo_t[-1]),
             0,
-            sci_notation_tex(mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
+            sci_notation_tex(
+                mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])
+            ),
         )
     )
     ##############################################################################
@@ -1888,7 +2061,9 @@ def halo_detailed_energy_and_mass_plots(results, derived_quant, title: str):
             adaptive_z[-1].value,
             sci_notation_tex(mhalo_t[-1]),
             0,
-            sci_notation_tex(mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
+            sci_notation_tex(
+                mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])
+            ),
         )
     )
 
@@ -2189,7 +2364,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     dot_m_ism_wind = derived_quant["dot_m_ism_wind"]
     dot_m_sfr = derived_quant["dot_m_sfr"]
     dot_m_bulge = derived_quant["dot_m_bulge"]
-    
+
     cooling_lambda = derived_quant["cooling_lambda"]
     f_prevent = derived_quant["f_prevent"]
     t_dynamical = derived_quant["t_dyn"]
@@ -2200,7 +2375,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     mgas_t = results["m_ism"]
     mstar_t = results["m_star"]
     mass_bulge_t = results["m_bulge"]
-    mbulge_eff = derived_quant["effective_bulge_mass"]      
+    mbulge_eff = derived_quant["effective_bulge_mass"]
     disk_stellar_mass = mstar_t - mass_bulge_t
     bulge_disk_ratio = mass_bulge_t / mstar_t
     mcgm_t = results["m_cgm"]
@@ -2235,7 +2410,6 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     # effective_bulge_mass[mask] = 0
     # effective_bulge_mass[~mask] =   effective_bulge_mass[~mask] - (np.pi * 1e9)
 
-
     # effective_bulge_mass2 [effective_bulge_mass2< np.pi*1e9] =0
     # let's standardize the colors
     cmapset_2 = plt.get_cmap("Dark2")
@@ -2245,7 +2419,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     c_mism = cmapset_2(6)
     c_mstar = cmapset_2(4)
     c_mhalo = "grey"
-    c_bh = "k"#cmapset_2(1)
+    c_bh = "k"  # cmapset_2(1)
 
     fb = 0.16  # baryon fraction
     run_text = (
@@ -2264,7 +2438,9 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
             adaptive_z[-1].value,
             sci_notation_tex(mhalo_t[-1]),
             0,
-            sci_notation_tex(mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])),
+            sci_notation_tex(
+                mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1])
+            ),
         )
     )
 
@@ -2301,7 +2477,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     ax[0].plot(
         t, mcgm_cold_t, label=r"$M_{\rm CGM, cold}$", color=c_mcgm_cold, lw=2, ls="--"
     )
-    
+
     ax[0].plot(t, mstar_t, label=r"$M_{\star}$", color=c_mstar, lw=2)
     ax[0].plot(
         t, mbulge_eff, label=r"$M_{\rm bulge}$", color="tab:green", ls="--", lw=2
@@ -2320,9 +2496,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     )
 
     # and the rates of change of masses
-    ax[2].plot(
-    t, dot_m_bh, label=r"$\dot{M}_{\rm \bullet}$", color=c_bh, lw=2
-    )
+    ax[2].plot(t, dot_m_bh, label=r"$\dot{M}_{\rm \bullet}$", color=c_bh, lw=2)
     ax[2].plot(t, dot_m_sfr, label=r"$\dot{M}_\star$", color=c_mstar, lw=2)
     ax[2].plot(t, dot_m_ism_wind, label=r"$\eta_M \dot{M}_\star$", color=c_mism, lw=2)
     ax[2].plot(
@@ -2349,7 +2523,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     # ax[2].plot(
     #     t, dot_m_bulge, label=r"$\dot{M}_{\rm bulge}$", color=c_mstar, ls="--", lw=2
     # )
-    
+
     # as well as the energy rates
     ax[3].plot(
         t,
@@ -2419,7 +2593,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
         frameon=False,
         loc="upper left",
         fontsize=8,
-        bbox_to_anchor=(-0.2,  -0.05),
+        bbox_to_anchor=(-0.2, -0.05),
     )
     max_y = max([line.get_ydata().max() for line in ax[3].lines])
     ax[3].set(
@@ -2560,20 +2734,15 @@ def accretion_rates(results, derived_quant, title: str):
     plt.show()
 
 
-# mhalo_z0 = 1e12 * u.Msun
-# t_span = (0.1, 13)  # gyrs
-# eta_m = 0.1
-# eta_e = 0.1
-# eta_z = 0.2
+# mhalo_z0 = 1e10 * u.Msun
+# t_span = (0.1, 1)  # gyrs
+
 # ##fmt: off
-# model = CGM_regulator(
+# model = CGMRegulator(
 #     mhalo_z0,
 #     t_span,
-
-#     eta_z=eta_z,
-#     cooling_dynamic_time_norm=1,
+#     eta_z=0.3,
 #     disk_scale_length=0.02,
-#     ep_bh_feedback_eff=0.02,
-#     bondi_boost=1e4,
-    
 # )
+# run_2phase = model.run_halo()
+# %%

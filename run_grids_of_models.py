@@ -3,7 +3,7 @@ from astropy import cosmology
 import h5py
 import astropy.units as u
 from cgm_sf_regulator_baseline import CGMRegulatorBaseline
-from cgm_sf_regulator import mhalo_at_z0
+from cgm_sf_regulator import mhalo_at_z0_fakhouri
 from cgm_sf_regulator import CGMRegulator
 
 # standard flat cosmology
@@ -18,7 +18,7 @@ def run_baseline_model_redshift_grid(observe_at, mhalos, write_to_file=None):
     """
     Runs the baseline CGM regulator model over a grid of redshifts and halo masses.
 
-    For each redshift in `observe_at`, and for each corresponding halo mass in `mhalos`, 
+    For each redshift in `observe_at`, and for each corresponding halo mass in `mhalos`,
     this function computes the stellar mass, halo mass, and ISM mass using the CGMRegulatorBaseline model.
     The stellar-to-halo mass ratio (SMHM) is calculated and stored for each redshift and halo mass.
 
@@ -69,7 +69,7 @@ def run_baseline_model_redshift_grid(observe_at, mhalos, write_to_file=None):
         # now, get the mass of the halo at z0 which is what we put into the integrator
         for midx, mhalo in enumerate(mhalos[zidx]):
             # we want to observe mhalo at z_obs, so we have to know its z=0 value for the function below
-            mhalo_z0 = mhalo_at_z0(mhalo, z_obs) * u.Msun
+            mhalo_z0 = mhalo_at_z0_fakhouri(mhalo, z_obs) * u.Msun
             print("")
             print(
                 "* observing halo with mass {:.2e} at z = {:.2f}".format(mhalo, z_obs)
@@ -79,6 +79,10 @@ def run_baseline_model_redshift_grid(observe_at, mhalos, write_to_file=None):
                 mhalo_z0,
                 t_span,
                 cooling_dynamic_time_norm=1,
+                updated_halo_infall=True,
+                updated_loadings=True,
+                updated_SF_law=True,
+                updated_2phase_CGM=False,
             )
 
             run = gridmodel.run_halo()
@@ -139,7 +143,7 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
     mbulge_obs_out = []
     sfr_obs_out = []
     m_metals_obs_out = []
-    
+
     # add BH masses
     mbh_obs_out = []
     for zidx, z_obs in enumerate(observe_at):
@@ -161,15 +165,13 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
         # now, get the mass of the halo at z0 which is what we put into the integrator
         for midx, mhalo in enumerate(mhalos[zidx]):
             # we want to observe mhalo at z_obs, so we have to know its z=0 value for the function below
-            mhalo_z0 = mhalo_at_z0(mhalo, z_obs) * u.Msun
+            mhalo_z0 = mhalo_at_z0_fakhouri(mhalo, z_obs) * u.Msun
             print("")
             print(
                 "* observing halo with mass {:.2e} at z = {:.2f}".format(mhalo, z_obs)
             )
             print("** mass of halo at z=0 is {:.2e}".format(mhalo_z0))
-            gridmodel = CGMRegulator(
-                mhalo_z0, t_span, KS_kappa_s=0.1
-            )
+            gridmodel = CGMRegulator(mhalo_z0, t_span, KS_kappa_s=0.1)
 
             run = gridmodel.run_halo()
             results = gridmodel.get_results()
@@ -178,7 +180,7 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
             m_bulge = results["m_bulge"][-1]
             m_halo = results["m_halo"][-1]
             m_metals = results["m_metals"][-1]
-            
+
             # Z_metal =  m_metals / (results["m_cgm_hot"][-1] + results["m_cgm_cold"][-1])
             # Z_sun = Z_metal / 0.0127
 
@@ -239,7 +241,6 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
         out_file.create_dataset("MMetals_obs", data=m_metals_obs_out)
         # also write the m_bulge
         out_file.create_dataset("MBulge_obs", data=mbulge_obs_out)
-        
 
         # out_file.create_dataset("MBH_obs", data=mbh_obs_out)
         out_file.close()
