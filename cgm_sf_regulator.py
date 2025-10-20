@@ -724,6 +724,54 @@ def sfr_density_prof(r, r_trunc, Sigma0_gas, Sigma0_star, n=1.5):
 
 
 class CGMRegulator:
+    """CGM regulator with strictly SF
+    
+
+    Args:
+            mhalo_z0 (_type_): _description_
+        time_interval (_type_): _description_
+        tstep (int, optional): _description_. Defaults to 1.
+        eta_z (float, optional): _description_. Defaults to 0.3.
+        verbose (bool, optional): _description_. Defaults to True.
+        dep_time_norm (float, optional): _description_. Defaults to 0.4.
+        cooling_dynamic_time_norm (int, optional): _description_. Defaults to 1.
+        disk_scale_length (float, optional): _description_. Defaults to 0.02.
+        KS_n (float, optional): _description_. Defaults to 1.5.
+        KS_kappa_s (float, optional): _description_. Defaults to 0.1.
+        r_bulge (int, optional): _description_. Defaults to 1.
+        dbug_norm_for_accretion_energy_rate (int, optional): _description_. Defaults to 1.
+        updated_halo_infall (bool, optional): _description_. Defaults to True.
+        updated_loadings (bool, optional): _description_. Defaults to True.
+        updated_2phase_CGM (bool, optional): _description_. Defaults to True.
+        updated_SF_law (bool, optional): _description_. Defaults to True.
+        add_f_prevent (bool, optional): _description_. Defaults to True.
+        alpha_m (float, optional): _description_. Defaults to 0.1.
+        alpha_e (float, optional): _description_. Defaults to 0.1.
+
+    Yields:
+        _type_: _description_
+        
+    
+    Example:  
+        mhalo_z0 = 1e10 * u.Msun
+        t_span = (0.1, 1)  # gyrs
+        model = CGMRegulator(
+            mhalo_z0,
+            t_span,
+            eta_z=0.3,
+            disk_scale_length=0.02,
+        )
+        run_2phase = model.run_halo()
+        
+        # get the mass and energy evolution
+        results_2phase = model.get_results()
+        print(results_2phase.keys())
+        
+        # get derive quantities such as derivs or cooling rates
+        derived_2phase = model.get_derived_quantities()
+        print(derived_2phase.keys())
+
+    """
     def __init__(
         self,
         mhalo_z0,
@@ -751,6 +799,7 @@ class CGMRegulator:
         alpha_m=0.1,
         alpha_e=0.1,
     ):
+        
         # fmt: off
         self.mhalo_z0 = mhalo_z0 # the mass of the halo we want to run to z=0
         self.verbose = verbose # extra printout
