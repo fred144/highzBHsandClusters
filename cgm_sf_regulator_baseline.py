@@ -722,7 +722,6 @@ class CGMRegulatorBaseline:
         r_bulge=1,
         updated_halo_infall=True,
         updated_loadings=True,
-        updated_2phase_CGM=True,
         updated_SF_law=True,
     ):
         self.mhalo_z0 = mhalo_z0
@@ -742,7 +741,7 @@ class CGMRegulatorBaseline:
 
         self.updated_halo_infall = updated_halo_infall
         self.updated_loadings = updated_loadings
-        self.updated_2phase_CGM = updated_2phase_CGM
+
         self.updated_SF_law = updated_SF_law
 
         # KS law star formation
@@ -837,8 +836,8 @@ class CGMRegulatorBaseline:
             self.eta_m = custom_mass_loading(m_halo, A=10, alpha=-0.7)
             self.eta_e = custom_energy_loading(m_halo, A=0.1, alpha=-0.4)
 
-        # if self.eta_e > 1:  # physical
-        #     self.eta_e = 1
+        if self.eta_e > 1:  # physical
+            self.eta_e = 1
 
         t_depletion = depletion_time(z, m_star, self.exp, self.dep_time_norm)
         # t_depletion = depletion_time_test(m_gas + m_star, r1)
@@ -1800,7 +1799,7 @@ def plot_halo_diagnostics(results, derived_quant, title: str):
 # eta_z = 0.2
 
 # model = CGMRegulatorBaseline(
-#     mhalo_z0, t_span, eta_m=eta_m, eta_e=eta_e, eta_z=eta_z, cooling_dynamic_time_norm=1
+#     mhalo_z0, t_span, eta_z=eta_z, cooling_dynamic_time_norm=1, updated_loadings=True
 # )
 # run = model.run_halo()
 # results = model.get_results()

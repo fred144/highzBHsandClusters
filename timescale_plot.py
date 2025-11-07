@@ -69,15 +69,22 @@ baseline_model = CGMRegulatorBaseline(
     tstep=0.0011,
     updated_halo_infall=False,
     updated_loadings=False,
-    updated_2phase_CGM=False,
     updated_SF_law=False,
+    verbose=False,
 )
 baseline_model.run_halo()
 results_baseline = baseline_model.get_results()
 derived_baseline = baseline_model.get_derived_quantities()
 
 # 2-phase (latest) model
-model_2phase = CGMRegulator(mhalo_z0, t_span, KS_kappa_s=0.1, add_f_prevent=1e-6)
+model_2phase = CGMRegulator(
+    mhalo_z0,
+    t_span,
+    KS_kappa_s=0.1,
+    add_f_prevent_floor=0.01,
+    verbose=False,
+    dbug_norm_for_2_phase_CGM=0,
+)
 model_2phase.run_halo()
 results_2phase = model_2phase.get_results()
 derived_2phase = model_2phase.get_derived_quantities()
@@ -185,12 +192,12 @@ ax.set_xlabel(r"time $[\mathrm{Gyr}]$")
 # Share x-axis between panels
 # ax[1].set_xlim(ax[0].get_xlim())
 
-plt.savefig(
-    "./figures/model_timescales_comparison.png",
-    dpi=200,
-    bbox_inches="tight",
-    pad_inches=0.05,
-)
+# plt.savefig(
+#     "./figures/model_timescales_comparison.png",
+#     dpi=200,
+#     bbox_inches="tight",
+#     pad_inches=0.05,
+# )
 plt.show()
 
 # %% let's look in more detail where the oscillations originate for the 2 phase model
@@ -202,7 +209,7 @@ halo_masses = np.logspace(10, 13, 12) * u.Msun  # You can change the range and n
 halo_results = []
 for mhalo in halo_masses:
     model_2phase = CGMRegulator(
-        mhalo, time_interval=(0.1, 13.3), KS_kappa_s=0.1, add_f_prevent=1e-6
+        mhalo, time_interval=(0.1, 13.3), KS_kappa_s=0.1, add_f_prevent_floor=1e-6, dbug_norm_for_2_phase_CGM=0, verbose=False
     )
     model_2phase.run_halo()
     results_2phase = model_2phase.get_results()
@@ -225,9 +232,11 @@ for mhalo in halo_masses:
     dot_e_minus = dot_e_cgm_cooling + dot_e_cgm_cooling
     # metal evolution
     m_metals = results_2phase["m_metals"]
-    cgm_metallicity = m_metals / (results_2phase["m_cgm_hot"] + results_2phase["m_cgm_cold"])
+    cgm_metallicity = m_metals / (
+        results_2phase["m_cgm_hot"] + results_2phase["m_cgm_cold"]
+    )
     cgm_Z_sun = cgm_metallicity / 0.0134
-    
+
     halo_results.append(
         {
             "mhalo": mhalo,
@@ -257,7 +266,6 @@ for mhalo in halo_masses:
         time_interval=(0.1, 13.3),
         updated_halo_infall=False,
         updated_loadings=False,
-        updated_2phase_CGM=False,
         updated_SF_law=False,
         # tstep=0.0001,
     )
@@ -482,14 +490,12 @@ ax[1].text(
 )
 
 
-plt.savefig(
-    "./figures/timescale_ratios.png", dpi=200, bbox_inches="tight", pad_inches=0.05
-)
+# plt.savefig(
+#     "./figures/timescale_ratios.png", dpi=200, bbox_inches="tight", pad_inches=0.05
+# )
 plt.show()
 
 # %% density and temperature of CGM
-
-
 fig, ax = plt.subplots(4, 2, dpi=300, figsize=(4.25, 8.5), sharex="col", sharey="row")
 ax = ax.flatten()
 plt.subplots_adjust(hspace=0.065, wspace=0.1)
@@ -500,16 +506,16 @@ for res in halo_results:
     t_vir = res["t_vir"]
     t_cgm = res["cgm_temp"]
     rho0 = res["rho0"]
-    Z_sun= res["cgm_Z_sun"]
+    Z_sun = res["cgm_Z_sun"]
 
     # First row: CGM temperature
     ax[0].plot(times, t_cgm, color=color)
     ax[1].plot(times, t_cgm, color=color)
-  
+
     # Second row: Virial temperature
     ax[2].plot(times, t_vir, color=color)
     ax[3].plot(times, t_vir, color=color)
-    
+
     # third row: rho0
     ax[4].plot(times, rho0, color=color)
     ax[5].plot(times, rho0, color=color)
@@ -525,18 +531,16 @@ ax[0].set(
     ylim=(2e4, 1e7),
 )
 ax[1].set(yscale="log", xlim=(8.05, 13), ylim=(2e4, 1e7))
-ax[2].set(
-        yscale="log", xlim=(0.05, 1.05), ylabel=r"$T_{\rm vir}$ [K]", ylim=(2e4, 1e8)
-    )
+ax[2].set(yscale="log", xlim=(0.05, 1.05), ylabel=r"$T_{\rm vir}$ [K]", ylim=(2e4, 1e8))
 ax[3].set(yscale="log", xlim=(8.05, 13), ylim=(2e4, 1e7))
 
 ax[4].set(
-    yscale="log", xlim=(0.05, 1.05), ylabel=r"$\rho_{\rm 0,hot} ~ [{\rm M_\odot ~kpc^{-3}}]$"
+    yscale="log",
+    xlim=(0.05, 1.05),
+    ylabel=r"$\rho_{\rm 0,hot} ~ [{\rm M_\odot ~kpc^{-3}}]$",
 )
 ax[5].set(yscale="log", xlim=(8.05, 13), ylim=(200, 3e7))
-ax[6].set(
-        yscale="log", xlim=(0.05, 1.05), ylabel=r"$Z_{\rm CGM} [{\rm Z_{\odot}}]$"
-    )
+ax[6].set(yscale="log", xlim=(0.05, 1.05), ylabel=r"$Z_{\rm CGM} [{\rm Z_{\odot}}]$")
 
 
 # Add twin redshift axis for the top row of plots (indices 0 and 1)
@@ -598,15 +602,15 @@ fig.text(1, 1.2, r"$z$", ha="left", va="top", transform=ax[0].transAxes)
 for axes in ax:
     for line in axes.lines:
         line.set_zorder(1)
-plt.savefig(
-    "./figures/cgm_temperature_and_density.png",
-    dpi=300,
-    bbox_inches="tight",
-    pad_inches=0.05,
-)
+# plt.savefig(
+#     "./figures/cgm_temperature_and_density.png",
+#     dpi=300,
+#     bbox_inches="tight",
+#     pad_inches=0.05,
+# )
 plt.show()
 
-# %% similar to timescale ratios but get the contributions from the different dot E terms
+ # %% similar to timescale ratios but get the contributions from the different dot E terms
 import cmasher as cmr
 
 # colormap
@@ -622,7 +626,7 @@ norm = matplotlib.colors.LogNorm(
 )
 sm = plt.cm.ScalarMappable(cmap=cmap_segmented, norm=norm)
 
-fig, ax = plt.subplots(4, 1,figsize=(4.25, 8.5), dpi=300, sharex=True, sharey=True)
+fig, ax = plt.subplots(4, 1, figsize=(4.25, 8.5), dpi=300, sharex=True, sharey=True)
 plt.subplots_adjust(hspace=0.05, wspace=0.03)
 
 threshold = 1e6  # K, example threshold for virial temperature
@@ -750,7 +754,7 @@ for i in [0]:
 # for row in range(4):
 #     for col in range(2):
 #         ax[row, col].axhline(1, ls="-", lw=2, color="grey", alpha=0.5)
-        
+
 # for i in range(4):
 #     ax[i].axhline(0.5, ls="-", lw=2, color="grey", alpha=0.5)
 # add text
@@ -777,11 +781,14 @@ ax[0].text(
 for axes in ax.flatten():
     for line in axes.lines:
         line.set_zorder(1)
- 
-plt.savefig(
-    "./figures/dotE_contribution_ratios.png", dpi=200, bbox_inches="tight", pad_inches=0.05
-)        
-        
+
+# plt.savefig(
+#     "./figures/dotE_contribution_ratios.png",
+#     dpi=200,
+#     bbox_inches="tight",
+#     pad_inches=0.05,
+# )
+
 plt.show()
 # %%
 fig, ax = plt.subplots(1, 1, dpi=300, figsize=(4.5, 4), sharex="col", sharey="row")
@@ -810,7 +817,7 @@ for res in halo_results[:1]:
     )
 ax.legend(frameon=False, fontsize=10)
 ax.set(
-    yscale="log",-- for both the model developed in this owkr and the baseline mode 
+    yscale="log",
     xlim=(0.05, 5),
     ylabel=r"$\rho_0 ~ [{\rm M_\odot ~kpc^{-3}}]$",
     ylim=(1e52, 1e56),

@@ -19,6 +19,8 @@ from tqdm import tqdm
 from mpl_toolkits.axes_grid1.inset_locator import zoomed_inset_axes
 from mpl_toolkits.axes_grid1.inset_locator import mark_inset
 from scipy.interpolate import RegularGridInterpolator
+import matplotlib as mpl
+from matplotlib.colors import ListedColormap, BoundaryNorm
 
 # defined some customization
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
@@ -88,6 +90,46 @@ class CoolingFunctionInterpolator:
         log_lambda = self.interpolator((log_temp, log_metallicity))
         return 10**log_lambda
 
+    def custom_cooling_function(
+        self, temperature, metallicity, T_thresh_cool=1e5, T_slope=0.1
+    ):
+        """
+        a custom cooling function that after T_thresh_cool, the cooling function
+        grown as T^0.1, still shifts up with increasing metallicity
+        """
+
+        # ensure arrays for vectorized operations
+        temps = np.asarray(temperature)
+        Z = np.asarray(metallicity)
+
+        # avoid non-positive metallicities (log10 in interpolator)
+        if np.any(Z <= 0):
+            Z = np.where(Z <= 0, 1e-4, Z)
+
+        # remember if inputs were scalars so we can return scalars
+        temps_was_scalar = np.isscalar(temperature) or temps.shape == ()
+        Z_was_scalar = np.isscalar(metallicity) or Z.shape == ()
+
+        # lambda_base: cooling at the requested temperatures (array or scalar)
+        lambda_base = self.cooling_function(temps, Z)
+
+        # cooling at the threshold for the given metallicity(s)
+        lambda_thresh = self.cooling_function(T_thresh_cool, Z)
+
+        # compute power-law growth above threshold
+        # broadcast temps and lambda_thresh as necessary
+        # use where to switch between base and extrapolated regimes
+        with np.errstate(divide="ignore", invalid="ignore"):
+            factor = (temps / T_thresh_cool) ** T_slope
+        lambda_custom = np.where(
+            temps > T_thresh_cool, lambda_thresh * factor, lambda_base
+        )
+
+        # return scalar if inputs were scalar
+        if temps_was_scalar and Z_was_scalar:
+            return np.asarray(lambda_custom).item()
+        return lambda_custom
+
 
 class WiersamaCooling:
     def __init__(self, table_path="./tables/Lambda_tab_redshifts.npz"):
@@ -148,7 +190,9 @@ class WiersamaCooling:
 
         # Clip to table range
         log_T = np.clip(input_log_T, *self.bounds["log_T"])
-        metallicity = np.clip(input_metallicity, 0, self.bounds["Z"][1])
+        metallicity = np.clip(
+            input_metallicity, self.bounds["Z"][0], self.bounds["Z"][1]
+        )
         log_nH = np.clip(input_log_nH, *self.bounds["log_nH"])
         z = np.clip(redshift, *self.bounds["z"])
 
@@ -186,6 +230,70 @@ redshift = 10
 cooling_lambda = cooling_fn(density, temperature, metallicity, redshift)
 print("lambda: ergs/s cm^3", cooling_lambda)
 
+# %% #test out the CoolingFunctionInterpolator
+
+temps = np.geomspace(1e4, 1e8, 100)
+metallicities = np.geomspace(1e-3, 2, 15)
+sutherland_dopita = CoolingFunctionInterpolator(file_path="./tables/newcool_viraj.dat")
+
+N = len(metallicities)
+# pick a continuous cmap and make N discrete colors
+base_cmap = plt.get_cmap("coolwarm_r")
+colors = base_cmap(np.linspace(0, 1, N))
+lcmap = ListedColormap(colors)
+bounds = np.arange(N + 1)
+norm = BoundaryNorm(bounds, lcmap.N)
+
+fig, ax = plt.subplots(
+    ncols=3, nrows=1, figsize=(10, 3), dpi=300, sharey=True, sharex=True
+)
+plt.subplots_adjust(wspace=0)
+
+for i, Z in enumerate(metallicities):
+    lambda_cool = sutherland_dopita.cooling_function(temps, Z) * (
+        u.erg * u.cm**3 * u.s**-1
+    )
+    ax[0].plot(temps, lambda_cool, color=lcmap(i), label=f"Z={Z:.1e} Zsun", lw=1.5)
+    lambda_cool_custom = sutherland_dopita.custom_cooling_function(
+        temps, Z, T_thresh_cool=2e4, T_slope=-0.2
+    ) * (u.erg * u.cm**3 * u.s**-1)
+    ax[1].plot(temps, lambda_cool_custom, color=lcmap(i), lw=1.5)
+
+    lambda_cool_custom1 = sutherland_dopita.custom_cooling_function(
+        temps, Z, T_thresh_cool=2e4, T_slope=0.2
+    ) * (u.erg * u.cm**3 * u.s**-1)
+    ax[2].plot(temps, lambda_cool_custom1, color=lcmap(i), lw=1.5)
+
+ax[0].set(
+    xscale="log",
+    yscale="log",
+    xlabel="CGM Temperature [K]",
+    ylabel=r"$\Lambda$ [erg cm$^3$ s$^{-1}$]",
+)
+# ax.legend(loc="lower left", fontsize=8)
+
+# segmented colorbar: one segment per metallicity value
+mappable = mpl.cm.ScalarMappable(cmap=lcmap, norm=norm)
+mappable.set_array([])  # required for colorbar
+cbar = fig.colorbar(
+    mappable, ax=ax, boundaries=bounds, ticks=np.arange(N) + 0.5, pad=0.02
+)
+# label ticks with the metallicity values (scientific notation)
+cbar.set_ticklabels([f"{Z:.1e}" for Z in metallicities])
+cbar.set_label("metallicity [Z$_\\odot$]")
+
+# add label to each subplot
+ax[0].text(
+    0.05, 0.05, "(a) Sutherland & Dopita (1993)", transform=ax[0].transAxes, fontsize=8
+)
+ax[1].text(
+    0.05, 0.05, "(b) Custom cooling (slope=-0.1)", transform=ax[1].transAxes, fontsize=8
+)
+ax[2].text(
+    0.05, 0.05, "(c) Custom cooling (slope=0.1)", transform=ax[2].transAxes, fontsize=8
+)
+
+plt.show()
 # %%
 
 
@@ -725,7 +833,7 @@ def sfr_density_prof(r, r_trunc, Sigma0_gas, Sigma0_star, n=1.5):
 
 class CGMRegulator:
     """CGM regulator with strictly SF
-    
+
 
     Args:
             mhalo_z0 (_type_): _description_
@@ -750,9 +858,9 @@ class CGMRegulator:
 
     Yields:
         _type_: _description_
-        
-    
-    Example:  
+
+
+    Example:
         mhalo_z0 = 1e10 * u.Msun
         t_span = (0.1, 1)  # gyrs
         model = CGMRegulator(
@@ -762,16 +870,17 @@ class CGMRegulator:
             disk_scale_length=0.02,
         )
         run_2phase = model.run_halo()
-        
+
         # get the mass and energy evolution
         results_2phase = model.get_results()
         print(results_2phase.keys())
-        
+
         # get derive quantities such as derivs or cooling rates
         derived_2phase = model.get_derived_quantities()
         print(derived_2phase.keys())
 
     """
+
     def __init__(
         self,
         mhalo_z0,
@@ -791,15 +900,17 @@ class CGMRegulator:
         # r_grav_physical=1,
         # m_bh_seed = 1e2,
         dbug_norm_for_accretion_energy_rate=1,
+        dbug_norm_for_2_phase_CGM=0,
         updated_halo_infall=True,
         updated_loadings=True,
         updated_2phase_CGM=True,
         updated_SF_law=True,
-        add_f_prevent=True,
+        add_f_prevent_floor=0.1,
+        add_f_prevent_constant=None,
         alpha_m=0.1,
         alpha_e=0.1,
     ):
-        
+
         # fmt: off
         self.mhalo_z0 = mhalo_z0 # the mass of the halo we want to run to z=0
         self.verbose = verbose # extra printout
@@ -876,7 +987,9 @@ class CGMRegulator:
         
         # dbug, temporary parms
         self.dbug_norm_for_accretion_energy_rate = dbug_norm_for_accretion_energy_rate
-        self.add_f_prevent = add_f_prevent
+        self.add_f_prevent_floor = add_f_prevent_floor
+        self.add_f_prevent_constant = add_f_prevent_constant
+        self.dbug_norm_for_2_phase_CGM = dbug_norm_for_2_phase_CGM
         # fmt: on
 
     def mass_evolution(self, t, mass, ode_mode=True):
@@ -938,10 +1051,15 @@ class CGMRegulator:
         cgm_metallicity_sol = cgm_metallicity / self.Z_sol
         # print(m_cgm)
 
-        ##### cooling functions value at this timeste
+        ##### cooling functions value at this timestep
+        
         # basic cooling, only temp and Z, from Viraj
-        cooling_lambda = self.cooling_fn.cooling_function(
-            cgm_temp.value, cgm_metallicity_sol
+        # cooling_lambda = self.cooling_fn.cooling_function(
+        #     cgm_temp.value, cgm_metallicity_sol
+        # ) * (u.erg * u.cm**3 * u.s**-1)
+
+        cooling_lambda = self.cooling_fn.custom_cooling_function(
+            cgm_temp.value, cgm_metallicity_sol, T_thresh_cool=2e4, T_slope=0.5
         ) * (u.erg * u.cm**3 * u.s**-1)
 
         # compute density normalization for power-law density model from CGM mass
@@ -1051,9 +1169,17 @@ class CGMRegulator:
         dot_mstar_central = dot_m_bulge * (u.solMass / u.Gyr)  # msun / Gyr
 
         # total ISM mass rate of change
-        dot_m_ism = (dot_m_cgm_cold_falling - dot_m_sfr * (1 + self.eta_m)).to(
-            u.solMass / u.Gyr
+
+        # dot_m_ism = (dot_m_cgm_cold_falling - dot_m_sfr * (1 + self.eta_m)).to(
+        #     u.solMass / u.Gyr
+        # )
+
+        dbug_rate = (
+            (1 - self.dbug_norm_for_2_phase_CGM) * dot_m_cgm_cold_falling
+            + self.dbug_norm_for_2_phase_CGM * dot_m_cgm_hot_cooling
         )
+        dot_m_ism = (dbug_rate - dot_m_sfr * (1 + self.eta_m)).to(u.solMass / u.Gyr)
+
         # star formation rate, as above
         dot_m_sfr = dot_m_sfr.to(u.solMass / u.Gyr)
 
@@ -1075,14 +1201,16 @@ class CGMRegulator:
             dot_energy_from_infall / dot_e_cgm_out
         )
 
-        if self.add_f_prevent:
-            f_prevent = min(
-                max(e_ejection_to_infall_ratio, self.add_f_prevent), 1.0
-            )  # 0.1 < f < 1
-            # f_prevent = np.min
+        if self.add_f_prevent_floor:
+            f_prevent = np.clip(
+                e_ejection_to_infall_ratio, self.add_f_prevent_floor, 1.0
+            )
         else:
             f_prevent = 1.0
 
+        if self.add_f_prevent_constant is not None:
+            f_prevent = self.add_f_prevent_constant
+        # print(f_prevent)
         dot_m_cgm_in *= f_prevent
 
         ##################### BH routines
@@ -1135,6 +1263,15 @@ class CGMRegulator:
         ##################### BH routines end
 
         # energy input from SF
+
+        dot_e_ism_wind = energy_gain(self.eta_e, dot_m_sfr)
+        # energy due to accretion, eq 16
+        dot_e_cgm_in = (self.kb * halo_vir_temp / self.mu * dot_m_cgm_in).to(
+            u.erg * u.Gyr**-1
+        )  # dot_m_cgm_in has the f_prvent already
+        # CGM feedback gain term, eq 9
+        dot_m_ism_wind = dot_m_sfr * self.eta_m
+
         if self.verbose:
             print("dot_m_sfr {:.3e}".format(dot_m_sfr))
             print(
@@ -1153,14 +1290,6 @@ class CGMRegulator:
                 f"dot_e_cgm_out={dot_e_cgm_out:.3e}, dot_e_cgm_hot_loss={dot_e_cgm_hot_loss:.3e}, dot_e_cgm_in={dot_e_cgm_in:.3e}, dot_e_cgm_cooling={dot_e_cgm_cooling:.3e}"
             )
             # print(f"dot_m_bh={dot_m_bh:.3e}, dot_e_bh_thermfeedback={dot_e_bh_thermfeedback:.3e}")
-
-        dot_e_ism_wind = energy_gain(self.eta_e, dot_m_sfr)
-        # energy due to accretion, eq 16
-        dot_e_cgm_in = (self.kb * halo_vir_temp / self.mu * dot_m_cgm_in).to(
-            u.erg * u.Gyr**-1
-        )  # dot_m_cgm_in has the f_prvent already
-        # CGM feedback gain term, eq 9
-        dot_m_ism_wind = dot_m_sfr * self.eta_m
 
         ####  main derivatives
 
@@ -1284,6 +1413,7 @@ class CGMRegulator:
                     t_ejection.value,
                     cgm_temp.value,
                     rho0.to(u.Msun / u.kpc**3).value,
+                    dot_m_halo.value,  # msun / Gyr
                     # dot_m_bh.value,
                     # dot_e_bh_thermfeedback.value,
                     # dot_m_bh_bondi.value,
@@ -1523,6 +1653,7 @@ class CGMRegulator:
             "t_ejection": derived_quantities[:, 18],
             "cgm_temp": derived_quantities[:, 19],
             "rho0": derived_quantities[:, 20],
+            "dot_m_halo": derived_quantities[:, 21],
             # "dot_m_bh": derived_quantities[:, 18],
             # "dot_e_bh_thermfeedback": derived_quantities[:, 19],
             # "dot_m_bh_bondi": derived_quantities[:, 20],
