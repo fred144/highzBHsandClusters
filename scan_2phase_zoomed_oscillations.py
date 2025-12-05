@@ -17,7 +17,7 @@ import astropy.constants as consts
 importlib.reload(cgm_sf_regulator)
 plt.rcParams.update(
     {
-        "text.usetex": True,
+        "text.usetex":False,
         # "font.family": "Helvetica",
         "font.family": "serif",
         "mathtext.fontset": "cm",
@@ -493,7 +493,7 @@ def plot_two_phase_epsilon_scan(
 # e_loadings = np.ones_like(m_loadings) * 0.1
 
 #low specific energy to high specific energy
-epsilons = np.linspace(0,1,20)[::-1]
+epsilons = np.linspace(0,1,20)[:1:]
 
 for i, e in enumerate(epsilons):
 
@@ -506,7 +506,7 @@ for i, e in enumerate(epsilons):
         # alpha_e=0.1,
         # alpha_m=0.1,
         updated_loadings=False,
-         updated_halo_infall=False,
+        updated_halo_infall=False,
         dbug_norm_for_2_phase_CGM=e,
     )
 
@@ -543,14 +543,14 @@ for i, e in enumerate(epsilons):
         show=False,
     )
 
-    plt.savefig(
-    "./figures/scan_2phase_behavior_old_loadings_old_infalls/norm_{:.5f}.png".format(
-        e
-    ),
-    dpi=200,
-    bbox_inches="tight",
-    pad_inches=0.05,
-    )
+    # plt.savefig(
+    # "./figures/scan_2phase_behavior_old_loadings_old_infalls/norm_{:.5f}.png".format(
+    #     e
+    # ),
+    # dpi=200,
+    # bbox_inches="tight",
+    # pad_inches=0.05,
+    # )
 
     plt.show()
 

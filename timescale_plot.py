@@ -27,7 +27,7 @@ import matplotlib.lines as mlines
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 plt.rcParams.update(
     {
-        "text.usetex": True,
+        "text.usetex": False,
         # "font.family": "Helvetica",
         "font.family": "serif",
         "mathtext.fontset": "cm",
@@ -205,7 +205,7 @@ plt.show()
 # Define geometrically spaced halo masses
 halo_masses = np.logspace(10, 13, 12) * u.Msun  # You can change the range and number
 # %%
-# store results for each halo mass\
+# store results for each halo mass\\
 halo_results = []
 for mhalo in halo_masses:
     model_2phase = CGMRegulator(
@@ -324,7 +324,7 @@ norm = matplotlib.colors.LogNorm(
     vmin=halo_masses.value.min(), vmax=halo_masses.value.max()
 )
 sm = plt.cm.ScalarMappable(cmap=cmap_segmented, norm=norm)
-
+#%%
 fig, ax = plt.subplots(3, 2, figsize=(9.5, 7.5), dpi=300, sharex=True)
 plt.subplots_adjust(hspace=0.05)
 

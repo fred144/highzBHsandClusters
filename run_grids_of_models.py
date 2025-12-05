@@ -171,7 +171,7 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
                 "* observing halo with mass {:.2e} at z = {:.2f}".format(mhalo, z_obs)
             )
             print("** mass of halo at z=0 is {:.2e}".format(mhalo_z0))
-            gridmodel = CGMRegulator(mhalo_z0, t_span, KS_kappa_s=0.1)
+            gridmodel = CGMRegulator(mhalo_z0, t_span, KS_kappa_s=0.1, add_f_prevent_floor=1e-6)
 
             run = gridmodel.run_halo()
             results = gridmodel.get_results()

@@ -17,7 +17,7 @@ import astropy.constants as consts
 importlib.reload(cgm_sf_regulator)
 plt.rcParams.update(
     {
-        "text.usetex": True,
+        "text.usetex": False,
         # "font.family": "Helvetica",
         "font.family": "serif",
         "mathtext.fontset": "cm",
@@ -53,7 +53,7 @@ f_b = Ob0 / Omegam0
 LCDM = cosmology.LambdaCDM(H0=H0, Om0=Omegam0, Ode0=Omegade0)
 
 
-mhalo_z0 = 1e12 * u.Msun
+mhalo_z0 = 2e13 * u.Msun
 t_span = (0.1, 13.3)  # gyrs
 xlim_for_zoom = (0.166, 2)
 
@@ -455,7 +455,7 @@ def plot_two_phase_eta_scan(
         xlabel=r"$t_{\rm univ}$ [Gyr]",
         yscale="log",
         xlim=xlim_for_zoom,
-        ylim=(1e-3,1e2)
+        ylim=(1e-4,1e2)
     )
     ax4.legend(loc="upper right")
 
@@ -470,8 +470,8 @@ def plot_two_phase_eta_scan(
 # e_loadings = np.ones_like(m_loadings) * 0.1
 
 #low specific energy to high specific energy
-m_loadings = np.geomspace(0.001, 0.1, 20)  
-e_loadings = np.geomspace(0.1, 0.001, 20)
+m_loadings = np.geomspace(0.0001, 10, 20)[::-1]  
+e_loadings = np.ones_like(m_loadings) * 10
 
 for i, (aM, aE) in enumerate(zip(m_loadings, e_loadings)):
 
@@ -516,8 +516,8 @@ for i, (aM, aE) in enumerate(zip(m_loadings, e_loadings)):
     )
 
     plt.savefig(
-    "./figures/scan_specific_energy_sne_winds/etaM_{:.5f}-etaE_{:.5f}.png".format(
-        aM, aE
+    "./figures/scan_specific_energy_sne_winds_2e13/{:04d}_etaM_{:.5f}-etaE_{:.5f}.png".format(
+        i, aM, aE
     ),
     dpi=200,
     bbox_inches="tight",
