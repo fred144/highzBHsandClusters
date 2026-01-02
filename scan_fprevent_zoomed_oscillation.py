@@ -89,7 +89,7 @@ f_b = Ob0 / Omegam0
 LCDM = cosmology.LambdaCDM(H0=H0, Om0=Omegam0, Ode0=Omegade0)
 
 
-mhalo_z0 = 1e13 * u.Msun
+mhalo_z0 = 1e12 * u.Msun
 t_span = (0.1, 13.3)  # gyrs
 xlim_for_zoom = (0.166, 2)
 
@@ -98,7 +98,7 @@ xlim_for_zoom = (0.166, 2)
 
 min_fprevent = np.linspace(0.01, 1, 20)  # we vary the minimum f_prevent value
 
-for i, fp in enumerate(min_fprevent[::]):
+for i, fp in enumerate(min_fprevent[:1:]):
 
     model_2phase = CGMRegulator(
         mhalo_z0,
@@ -862,13 +862,13 @@ for fp in const_f_prevent_scan[::]:
         va="top",
         color="k",
     )
-    plt.savefig(
-        "./figures/f_prevent_zoom_test_1e12/2phase_detailed_cgm_1e12_fp_{:.6f}.png".format(
-            fp
-        ),
-        dpi=200,
-        bbox_inches="tight",
-        pad_inches=0.05,
-    )
+    # plt.savefig(
+    #     "./figures/f_prevent_zoom_test_1e12/2phase_detailed_cgm_1e12_fp_{:.6f}.png".format(
+    #         fp
+    #     ),
+    #     dpi=200,
+    #     bbox_inches="tight",
+    #     pad_inches=0.05,
+    # )
 
     plt.show()

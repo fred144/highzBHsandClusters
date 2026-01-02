@@ -1,3 +1,4 @@
+#%%
 import numpy as np
 from astropy import cosmology
 import h5py
@@ -129,7 +130,7 @@ def run_baseline_model_redshift_grid(observe_at, mhalos, write_to_file=None):
     return smhm_out, zsims
 
 
-def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
+def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None, **kwargs):
     # declare a 2d array to store the results
     # each row is a different redshift
     # each column is a different halo mass
@@ -171,7 +172,7 @@ def run_2phase_model_redshift_grid(observe_at, mhalos, write_to_file=None):
                 "* observing halo with mass {:.2e} at z = {:.2f}".format(mhalo, z_obs)
             )
             print("** mass of halo at z=0 is {:.2e}".format(mhalo_z0))
-            gridmodel = CGMRegulator(mhalo_z0, t_span, KS_kappa_s=0.1, add_f_prevent_floor=1e-6)
+            gridmodel = CGMRegulator(mhalo_z0, t_span, add_f_prevent_floor=1e-6, verbose=False, **kwargs)
 
             run = gridmodel.run_halo()
             results = gridmodel.get_results()

@@ -493,34 +493,34 @@ def plot_two_phase_epsilon_scan(
 # e_loadings = np.ones_like(m_loadings) * 0.1
 
 #low specific energy to high specific energy
-epsilons = np.linspace(0,1,20)[:1:]
+epsilons = np.linspace(0,1,20)[::-1][0:1] #np.linspace(0,1,20)[:1:]
 
 for i, e in enumerate(epsilons):
 
     model_2phase = CGMRegulator(
         mhalo_z0,
         (0.2, xlim_for_zoom[1]),
-        KS_kappa_s=0.1,
+        KS_kappa_s=10,
         add_f_prevent_floor=1e-6,
         verbose=False,
         # alpha_e=0.1,
         # alpha_m=0.1,
-        updated_loadings=False,
-        updated_halo_infall=False,
-        dbug_norm_for_2_phase_CGM=e,
+        updated_loadings=True,
+        updated_halo_infall=True,
+        dbug_norm_for_2_phase_CGM=0,
     )
 
     model_2Phase_long = CGMRegulator(
         mhalo_z0,
         (0.15, 13),
-        KS_kappa_s=0.1,
+        KS_kappa_s=10,
         add_f_prevent_floor=1e-6,
         verbose=False,
         # alpha_e=0.1,
         # alpha_m=0.1,
-        updated_loadings=False,
-        updated_halo_infall=False,
-        dbug_norm_for_2_phase_CGM=e,
+        updated_loadings=True,
+        updated_halo_infall=True,
+        dbug_norm_for_2_phase_CGM=0,
     )
 
     run_2phase = model_2phase.run_halo()

@@ -426,8 +426,8 @@ def halo_mass_growth_fakhouri(t, mass):
     """
     mhalo = mass * u.solMass
     #    z = np.sqrt((28/t) - 1) - 1 # cosmological redshift
-    if t > 13.47:  # 13.4 is the age of the universe in Gyr
-        t = 13.466983947061877
+    if t > 13.466983807377275:  # 13.4 is the age of the universe in Gyr
+        t = 13.46
     z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
     mhalo_dot = halo_infall_fakhouri(z, mhalo)
 
@@ -441,8 +441,8 @@ def halo_mass_growth_dekel(t, mass):
     """
     mhalo = mass * u.solMass
     #    z = np.sqrt((28/t) - 1) - 1 # cosmological redshift
-    if t > 13.47:  # 13.4 is the age of the universe in Gyr
-        t = 13.466983947061877
+    if t >  13.466983807377275:  # 13.4 is the age of the universe in Gyr
+        t = 13.46
     z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
     mhalo_dot = halo_infall_dekel(z, mhalo)
 
@@ -479,7 +479,7 @@ def mhalo_at_z0_fakhouri(mhalo_at_z, z_obs):
     time_interval = (LCDM.age(z_obs).value, LCDM.age(0.0001).value)
     # print(time_interval)
     mass_initial = np.array([mhalo_at_z.value])
-    sol_0 = solve_ivp(halo_mass_growth_dekel, time_interval, mass_initial)
+    sol_0 = solve_ivp(halo_mass_growth_fakhouri, time_interval, mass_initial)
     return sol_0.y[0][-1]  # return the last value of the solution
 
 
@@ -830,7 +830,7 @@ class CGMRegulator:
         cooling_dynamic_time_norm=1,
         disk_scale_length=0.02,
         KS_n=1.5,
-        KS_kappa_s=0.1,
+        KS_kappa_s=10,
         r_bulge=1,
         # ep_bh_radeff=0.1,
         # ep_bh_feedback_eff=0.02,
@@ -882,7 +882,7 @@ class CGMRegulator:
 
         self.t_eject_lim_norm = 0.1  # ejection time limit factor
         self.cgm_ejecti_specific_energy_ratio = 1    # sets how E_out is at preventing inflow (smaller - more effective)
-        self.cgm_infall_prevention_const = 1    # ratio of specific energy of ejected gas to CGM gas
+        self.cgm_infall_prevention_const = 1    # ratio of specific energy of ejected gas to CGM gas, different from C23
 
         self.disk_scale = disk_scale_length  # disk scale radius in units of Rvir
         self.r_cgm_scale = 0.1  # inner radius of CGM in units of Rvir
@@ -955,7 +955,11 @@ class CGMRegulator:
         cm_per_km = 1e5
         kb_erg_per_K = consts.k_B.to(u.erg / u.K).value
         mu_g = (0.6 * consts.m_p).to(u.g).value
-
+        mass_floor_msun = 1e-12  # Msun
+        vel_floor_kms =1e-12  # km/s
+        time_floor_gyr = 1e-12  # Gyr
+        erg_per_Gyr_floor = 1e-12 
+        
         # get current redshift
         z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
 
@@ -976,7 +980,7 @@ class CGMRegulator:
 
         # m_bh = mass[12] * u.solMass        # Total black hole mass
 
-        # ------ derive halo properties using the helper functions but convert once
+        ###- derive halo properties using the helper functions but convert once
         halo_rvir_kpc = virial_radius(z, m_halo * u.solMass).to(u.kpc).value
         r1_kpc = self.r_cgm_scale * halo_rvir_kpc
         halo_vcirc_kms = (
@@ -1011,23 +1015,26 @@ class CGMRegulator:
 
         # compute CGM effective temperature (numeric K)
         # e_cgm [erg], m_cgm_hot [Msun] -> convert mass to g -> energy per gram (erg/g)
-        mass_hot_g = max(m_cgm_hot, 1e-12) * Msun_g
-        e_per_mass_erg_per_g = e_cgm / mass_hot_g if mass_hot_g > 0 else 0.0
+        mass_hot_g = max(m_cgm_hot, mass_floor_msun) * Msun_g
+        if mass_hot_g > 0:
+            e_per_mass_erg_per_g = e_cgm / mass_hot_g
+        else:
+            e_per_mass_erg_per_g = 0.0
         # cgm_temp = (e_cgm/m_cgm_hot) * (mu / kb)  -> numeric K:
         cgm_temp_K = e_per_mass_erg_per_g * (mu_g / kb_erg_per_K)
 
         # dynamical time estimate (use kpc and km/s -> seconds -> Gyr)
         # t_dynamical = r / v
         r_km = halo_rvir_kpc * (u.kpc.to(u.km))
-        t_dynamical_sec = r_km / max(halo_vcirc_kms, 1e-12)
+        t_dynamical_sec = r_km / max(halo_vcirc_kms, vel_floor_kms)
         t_dynamical_Gyr = t_dynamical_sec / sec_per_Gyr
 
         # CGM metallicity (in solar units)
-        m_cgm_safe = max(m_cgm, 1e-12)
+        m_cgm_safe = max(m_cgm, mass_floor_msun)
         cgm_metallicity = m_metals / m_cgm_safe  # metal mass fraction
         cgm_metallicity_sol = cgm_metallicity / self.Z_sol
 
-        # ----- cooling lambda (unit: erg cm^3 s^-1) numeric
+        ### cooling lambda (unit: erg cm^3 s^-1) numeric
         if self.custom_cooling_params is not None:
             cooling_lambda_val = float(
                 self.cooling_fn.custom_cooling_function(
@@ -1042,7 +1049,7 @@ class CGMRegulator:
                 self.cooling_fn.cooling_function(cgm_temp_K, cgm_metallicity_sol)
             )
 
-        # ----- density normalization rho0 (we compute unitless numeric in Msun/kpc^3)
+        ### density normalization rho0 (we compute unitless numeric in Msun/kpc^3)
         rho0_msun_per_kpc3 = density0(
             mCGM=m_cgm_hot, r0=r1_kpc, Rvir=halo_rvir_kpc, alpha=self.alpha
         )
@@ -1052,7 +1059,7 @@ class CGMRegulator:
         # central number density (1/cm^3)
         nh_0 = rho0_g_cm3 / mu_g if mu_g > 0 else 0.0
 
-        # ----- compute radiative energy loss integrated numerically in CGS
+        ### compute radiative energy loss integrated numerically in CGS
         # energy_loss (cgs): erg/s
         # r1 and Rvir convert to cm
         r1_cm = r1_kpc * kpc_to_cm
@@ -1077,12 +1084,12 @@ class CGMRegulator:
         # convert to erg/Gyr for consistency with rest of code (time units are Gyr)
         dot_e_cgm_hot_loss_erg_per_Gyr = rad_loss_erg_per_s * sec_per_Gyr
 
-        # ----- ejection timescale and limits
+        ### ejection timescale and limits
         # compute sound speed from e_per_mass (erg/g) -> cm/s
         c_sound_cm_s = np.sqrt(max(e_per_mass_erg_per_g, 0.0))
         c_sound_kms = c_sound_cm_s / cm_per_km
         # t_ejection = rvir / c_sound (in seconds -> Gyr)
-        t_ejection_sec = (halo_rvir_kpc * kpc_to_cm) / max(c_sound_cm_s, 1e-12)
+        t_ejection_sec = (halo_rvir_kpc * kpc_to_cm) / max(c_sound_cm_s, vel_floor_kms * cm_per_km)
         t_ejection_Gyr = t_ejection_sec / sec_per_Gyr
 
         # apply limits: between self.t_eject_lim_norm * t_dynamical and t_dynamical
@@ -1096,9 +1103,9 @@ class CGMRegulator:
         # thermal_energy_virial = kb * Tvir * (mass_hot_g) / mu_g (erg)
         thermal_energy_virial = kb_erg_per_K * halo_vir_temp_K * mass_hot_g / mu_g
         e_excess_erg = max(e_cgm - thermal_energy_virial, 0.0)
-        dot_e_cgm_out_erg_per_Gyr = e_excess_erg / max(t_ejection_Gyr, 1e-30)
+        dot_e_cgm_out_erg_per_Gyr = e_excess_erg / max(t_ejection_Gyr, erg_per_Gyr_floor)
 
-        # ----- cooling time and energy cooling rate (Gyr units)
+        ### cooling time and energy cooling rate (Gyr units)
         # cgm_specific_e: erg per g (use max between e_per_mass and kb*T/mu)
         kb_term_erg_per_g = kb_erg_per_K * cgm_temp_K / mu_g if mu_g > 0 else 0.0
         cgm_specific_e_erg_per_g = self.cgm_ejecti_specific_energy_ratio * max(
@@ -1115,19 +1122,19 @@ class CGMRegulator:
             tcool_Gyr = total_energy_erg / dot_e_cgm_hot_loss_erg_per_Gyr
 
         # prevent non-physical or negative
-        tcool_Gyr = max(tcool_Gyr, 1e-12)
+        tcool_Gyr = max(tcool_Gyr, time_floor_gyr)
 
         # dot_e_cgm_cooling (erg/Gyr)
         dot_e_cgm_cooling_erg_per_Gyr = e_cgm / tcool_Gyr
 
-        # ----- mass exchange rates (Msun/Gyr)
+        ### mass exchange rates (Msun/Gyr)
         dot_m_cgm_hot_cooling = m_cgm_hot / tcool_Gyr
-        dot_m_cgm_cold_falling = m_cgm_cold / max(t_dynamical_Gyr, 1e-30)
+        dot_m_cgm_cold_falling = m_cgm_cold / max(t_dynamical_Gyr, time_floor_gyr)
 
         # star formation (KS-like) -- do unitless arithmetic (Msun, kpc)
         r_disk_kpc = self.disk_scale * halo_rvir_kpc
         sigma0 = m_ism / (2.0 * np.pi * (r_disk_kpc**2))  # Msun / kpc^2
-        Asfr = 1e-12 * self.ks_kappa_s * 1e9  # msun / Gyr / kpc^2 as in prior code
+        Asfr = 1e-12 * self.ks_kappa_s * 1e9  # msun / Gyr / kpc^2 
         if self.verbose:
             print(
                 f"dot_m_star inputs: Asfr={Asfr:.3e}, sigma0={sigma0:.3e}, ks_n={self.ks_n:.3e}, r_disk={r_disk_kpc:.3e}, m_ism={m_ism:.3e}"
@@ -1171,7 +1178,7 @@ class CGMRegulator:
                 halo_infall_dekel(z, m_halo * u.solMass).to(u.solMass / u.Gyr).value
             )
 
-        dot_m_cgm_in = self.fb * dot_m_halo  # Msun / Gyr
+        dot_m_cgm_accreted = self.fb * dot_m_halo  # Msun / Gyr, unrestricted
 
         # mass ejected from CGM due to energy outflow (Msun/Gyr)
         # dot_m_cgm_out = (1 / cgm_specific_e) * dot_e_cgm_out
@@ -1186,10 +1193,10 @@ class CGMRegulator:
 
         # prevention due to ejection vs infall energy (numeric)
         dot_energy_from_infall_erg_per_Gyr = (kb_erg_per_K * halo_vir_temp_K / mu_g) * (
-            dot_m_cgm_in * Msun_g
+            dot_m_cgm_accreted * Msun_g
         )
         e_ejection_to_infall_ratio = self.cgm_infall_prevention_const * (
-            dot_energy_from_infall_erg_per_Gyr / max(dot_e_cgm_out_erg_per_Gyr, 1e-30)
+            dot_energy_from_infall_erg_per_Gyr / max(dot_e_cgm_out_erg_per_Gyr, erg_per_Gyr_floor)
         )
 
         if self.add_f_prevent_floor:
@@ -1202,16 +1209,53 @@ class CGMRegulator:
         if self.add_f_prevent_constant is not None:
             f_prevent = float(self.add_f_prevent_constant)
 
-        dot_m_cgm_in *= f_prevent
+        dot_m_cgm_in = f_prevent * dot_m_cgm_accreted # this is attenuated now
 
-        # BH routines preserved in comments (untouched)
         ##################### BH routines
         # c_s = np.sqrt(self.kb * cgm_temp / self.mu).to(u.km / u.s)
         # rho_0_hot = rho0 # can relax this assumption maybe, cuspy?
         # dot_m_bh_bondi = (4 * np.pi * self.G**2 * rho_0_hot * m_bh**2) / c_s**3
         # dot_m_bh_bondi = self.bondi_boost * dot_m_bh_bondi.to(u.solMass / u.Gyr)
-        #
-        # ...
+        # # find the gas the BH accretion kernel by integrating the profile to r_grav_physical, analytical solution
+        # m_gas_in_bh_disk = (
+        #     2
+        #     * np.pi
+        #     * sigma0
+        #     * (
+        #         r_disk**2
+        #         - (r_disk * self.r_grav_physical + r_disk**2)
+        #         * np.exp(-self.r_grav_physical / r_disk)
+        #     )
+        # )
+
+        # # bulge definition needed for tla accretion
+        # effective_bulge_mass = np.max([m_bulge.value - (np.pi * 1e9), 0])
+        # m_star_in_bh_disk  = m_bulge.value - effective_bulge_mass
+        # m_enclosed =  m_gas_in_bh_disk + m_star_in_bh_disk + effective_bulge_mass
+        # mbh_disk =m_gas_in_bh_disk + m_star_in_bh_disk # the disk component
+        # f_gas = m_gas_in_bh_disk /  mbh_disk
+        # f_disk = mbh_disk / m_enclosed
+        # f_0 = 0.31 * f_disk**2 * (mbh_disk / 1e9) ** -0.666
+
+        # if mbh_disk > 0:
+        #     dot_m_tla = (
+        #         0.15
+        #         * f_disk**2.5
+        #         * (m_bh.value / 1e8) ** (1 / 6)
+        #         * (m_enclosed/ 1e9)
+        #         * (self.r_grav_physical / 0.1) ** (-3 / 2)
+        #         * (1 + f_0 / f_gas) ** -1
+        #     )
+        # else:
+        #     dot_m_tla = 0.0
+        # dot_m_bh_tla = dot_m_tla * (u.solMass / u.yr)
+        # dot_m_bh_tla = dot_m_bh_tla.to(u.solMass / u.Gyr)
+        # dot_m_bh =  dot_m_bh_bondi + dot_m_bh_tla
+
+        # dot_e_bh_thermfeedback = (self.ep_bh_feedback_eff * self.ep_bh_radeff * dot_m_bh * consts.c**2).to(
+        #     u.erg / u.Gyr
+        # )
+        # dot_m_bh *= (1 - self.ep_bh_radeff)
         ##################### BH routines end
 
         # energy input from SF (erg/Gyr)
@@ -1220,7 +1264,7 @@ class CGMRegulator:
             .to(u.erg / u.Gyr)
             .value
         )
-        # energy due to accretion (erg/Gyr)
+        # energy due to infall, f_prevent modulated at this point (erg/Gyr)
         dot_e_cgm_in_erg_per_Gyr = (kb_erg_per_K * halo_vir_temp_K / mu_g) * (
             dot_m_cgm_in * Msun_g
         )  # erg/Gyr

@@ -20,7 +20,7 @@ importlib.reload(cgm_sf_regulator)
 plt.rcParams.update(
     {
         "text.usetex": False,
-        # "font.family": "Helvetica",
+        "font.family": "Helvetica",
         "font.family": "serif",
         "mathtext.fontset": "cm",
         "xtick.labelsize": 11,
@@ -38,7 +38,7 @@ plt.rcParams.update(
         "ytick.minor.visible": True,
     }
 )
-
+#%%
 red1 = "tab:red"
 red2 = "tab:orange"
 blu1 = "dodgerblue"
