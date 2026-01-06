@@ -1,4 +1,8 @@
 # %%
+"""
+test scan for varying epsilon in 2-phase CGM model
+"""
+
 import importlib
 import numpy as np
 import matplotlib.pyplot as plt
@@ -500,27 +504,26 @@ for i, e in enumerate(epsilons):
     model_2phase = CGMRegulator(
         mhalo_z0,
         (0.2, xlim_for_zoom[1]),
-        KS_kappa_s=10,
         add_f_prevent_floor=1e-6,
         verbose=False,
         # alpha_e=0.1,
         # alpha_m=0.1,
         updated_loadings=True,
         updated_halo_infall=True,
-        dbug_norm_for_2_phase_CGM=0,
+        dbug_norm_for_2_phase_CGM=e,
     )
 
     model_2Phase_long = CGMRegulator(
         mhalo_z0,
         (0.15, 13),
-        KS_kappa_s=10,
+       
         add_f_prevent_floor=1e-6,
         verbose=False,
         # alpha_e=0.1,
         # alpha_m=0.1,
         updated_loadings=True,
         updated_halo_infall=True,
-        dbug_norm_for_2_phase_CGM=0,
+        dbug_norm_for_2_phase_CGM=e,
     )
 
     run_2phase = model_2phase.run_halo()

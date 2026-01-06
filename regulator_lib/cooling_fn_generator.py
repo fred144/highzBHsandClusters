@@ -10,6 +10,79 @@ from scipy import integrate
 from scipy.integrate import solve_ivp
 from astropy import cosmology
 import h5py
+from scipy.interpolate import RegularGridInterpolator
+class CoolingFunctionInterpolator:
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self._load_data()
+        self.interpolator = RegularGridInterpolator(
+            (self.temperatures, self.metallicities),
+            self.lambda_values,
+            bounds_error=False,
+            fill_value=None,
+        )
+
+    def _load_data(self):
+        # Load the data using numpy, skipping header lines
+        data = np.loadtxt(self.file_path, skiprows=5)
+        self.temperatures = data[:, 0]
+        self.lambda_values = data[:, 1:]
+
+        # Extract metallicities from the header line directly
+        with open(self.file_path, "r") as file:
+            metallicity_line = file.readlines()[3].strip().split()
+            # print(metallicity_line)
+            self.metallicities = list(
+                map(float, metallicity_line[1 : len(self.lambda_values[0]) + 1])
+            )
+            # print(self.metallicities)
+
+    def cooling_function(self, temperature, metallicity):
+        log_temp = np.log10(temperature)
+        log_metallicity = np.log10(metallicity)
+        # print(log_temp,  log_metallicity)
+        log_lambda = self.interpolator((log_temp, log_metallicity))
+        return 10**log_lambda
+
+    def custom_cooling_function(
+        self, temperature, metallicity, T_thresh_cool=1e5, T_slope=0.1
+    ):
+        """
+        a custom cooling function that after T_thresh_cool, the cooling function
+        grown as T^0.1, still shifts up with increasing metallicity
+        """
+
+        # ensure arrays for vectorized operations
+        temps = np.asarray(temperature)
+        Z = np.asarray(metallicity)
+
+        # avoid non-positive metallicities (log10 in interpolator)
+        if np.any(Z <= 0):
+            Z = np.where(Z <= 0, 1e-4, Z)
+
+        # remember if inputs were scalars so we can return scalars
+        temps_was_scalar = np.isscalar(temperature) or temps.shape == ()
+        Z_was_scalar = np.isscalar(metallicity) or Z.shape == ()
+
+        # lambda_base: cooling at the requested temperatures (array or scalar)
+        lambda_base = self.cooling_function(temps, Z)
+
+        # cooling at the threshold for the given metallicity(s)
+        lambda_thresh = self.cooling_function(T_thresh_cool, Z)
+
+        # compute power-law growth above threshold
+        # broadcast temps and lambda_thresh as necessary
+        # use where to switch between base and extrapolated regimes
+        with np.errstate(divide="ignore", invalid="ignore"):
+            factor = (temps / T_thresh_cool) ** T_slope
+        lambda_custom = np.where(
+            temps > T_thresh_cool, lambda_thresh * factor, lambda_base
+        )
+
+        # return scalar if inputs were scalar
+        if temps_was_scalar and Z_was_scalar:
+            return np.asarray(lambda_custom).item()
+        return lambda_custom
 
 
 def cooling_fn_generator(path):
