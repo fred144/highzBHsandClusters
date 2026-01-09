@@ -192,7 +192,7 @@ vcirc = vcirc_from_virial_T(halo_Tvirs)
 # %% run grid of models for comparison using baseline
 
 # write to file
-file = "./runs/smhm_baseline_redshift_scan_more_halo_obsfig2.h5"
+file = "./runs/smhm_baseline_redshift_latest_more_info.h5"
 
 if not os.path.exists(file):
     redshift_variation, zsims = run_baseline_model_redshift_grid(
@@ -259,9 +259,6 @@ ax[2].plot(
     ls=":",
     label=r"$T_{\rm vir} \geq 10^6$ K",
 )
-
-
-
 
 for i, zb in enumerate(zbins_str[::-1]):
     ax[0].plot(

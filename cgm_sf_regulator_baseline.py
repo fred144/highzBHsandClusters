@@ -720,9 +720,9 @@ class CGMRegulatorBaseline:
         KS_n=1.5,
         KS_kappa_s=0.1,
         r_bulge=1,
-        updated_halo_infall=True,
-        updated_loadings=True,
-        updated_SF_law=True,
+        updated_halo_infall=False,
+        updated_loadings=False,
+        updated_SF_law=False,
     ):
         self.mhalo_z0 = mhalo_z0
         self.verbose = verbose

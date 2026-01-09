@@ -55,6 +55,9 @@ def run_baseline_model_redshift_grid(observe_at, mhalos, write_to_file=None):
     mhalo_obs_out = []
     mstar_obs_out = []
     mism_obs_out = []
+    
+    sfr_obs_out = []
+    m_metals_obs_out = []
 
     for zidx, z_obs in enumerate(observe_at):
         t_init = 0.1  # Gyr
@@ -66,6 +69,11 @@ def run_baseline_model_redshift_grid(observe_at, mhalos, write_to_file=None):
         mhalo_obs = []
         mstar_obs = []
         mism_obs = []
+
+       
+        sfr_obs = []
+        m_metals_obs = []
+
 
         # now, get the mass of the halo at z0 which is what we put into the integrator
         for midx, mhalo in enumerate(mhalos[zidx]):
@@ -80,30 +88,43 @@ def run_baseline_model_redshift_grid(observe_at, mhalos, write_to_file=None):
                 mhalo_z0,
                 t_span,
                 cooling_dynamic_time_norm=1,
-                updated_halo_infall=True,
-                updated_loadings=True,
-                updated_SF_law=True,
-                updated_2phase_CGM=False,
+                updated_halo_infall=False,
+                updated_loadings=False,
+                updated_SF_law=False,
+                
             )
 
             run = gridmodel.run_halo()
             results = gridmodel.get_results()
+            derived = gridmodel.get_derived_quantities()
             m_star = results["m_star"][-1]
+          
             m_halo = results["m_halo"][-1]
+            m_metals = results["m_metals"][-1]
+
             print("** final halo mass = {:.2e}".format(m_halo))
 
             mhalo_obs.append(m_halo)
             mstar_obs.append(m_star)
+           
             mism_obs.append(results["m_gas"][-1])
+            sfr_obs.append(derived["dot_m_sfr"][-1])
+            m_metals_obs.append(m_metals)
+
 
         mhalo_obs = np.array(mhalo_obs)
         mstar_obs = np.array(mstar_obs)
         mism_obs = np.array(mism_obs)
+    
 
         # now put it into the output arrays
         mhalo_obs_out.append(mhalo_obs)
         mstar_obs_out.append(mstar_obs)
+
         mism_obs_out.append(mism_obs)
+        sfr_obs_out.append(sfr_obs)
+        m_metals_obs_out.append(m_metals_obs)
+
 
         smhm = mstar_obs / (mhalo_obs * (Ob0 / Omegam0))
 
@@ -125,6 +146,10 @@ def run_baseline_model_redshift_grid(observe_at, mhalos, write_to_file=None):
         # now do star mass, ism mass, cgm hot and cold masses
         out_file.create_dataset("Mstar_obs", data=mstar_obs_out)
         out_file.create_dataset("MISM_obs", data=mism_obs_out)
+
+        out_file.create_dataset("SFR_obs", data=sfr_obs_out)
+        out_file.create_dataset("MMetals_obs", data=m_metals_obs_out)
+
         out_file.close()
 
     return smhm_out, zsims
