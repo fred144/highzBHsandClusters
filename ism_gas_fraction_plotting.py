@@ -153,10 +153,10 @@ print(zobs)
 print(mhalos[0])
 
 kappa_sfr = 0.1
-n_sfrs = np.linspace(1.3, 1.5, 10)
-r_disk_sfr = 0.02
-
-for j,n_sfr in enumerate(n_sfrs):
+# n_sfrs = np.linspace(1.3, 1.5, 10)
+r_disk_sfrs = np.geomspace(0.001, 0.01, 15)
+n_sfr = 1.5
+for j,r_disk_sfr in enumerate(r_disk_sfrs):
 
     param_txt =  f"KS_kappa{str(kappa_sfr).replace('.', 'p')}_" + f"n{str(n_sfr).replace('.', 'p')}_" + f"r{str(r_disk_sfr).replace('.', 'p')}"
         
@@ -327,7 +327,7 @@ for j,n_sfr in enumerate(n_sfrs):
     ax[0].text(0.25,1.05, rf"KS: $\kappa={kappa_sfr}$, $n={n_sfr}$, $r_{{\rm disk}}={r_disk_sfr} R_{{\rm vir}}$", transform=ax[0].transAxes, fontsize=10, va="bottom", ha="left")
 
     plt.savefig(
-        f"./figures/KS_ism_gas_fraction_n_scan_fine/{j:02d}_ism_gas_fractions_{param_txt}.png",
+        f"./figures/KS_ism_gas_fraction_rdisk_scan/{j:02d}_ism_gas_fractions_{param_txt}.png",
         dpi=200,
         bbox_inches="tight",
         pad_inches=0.05,
