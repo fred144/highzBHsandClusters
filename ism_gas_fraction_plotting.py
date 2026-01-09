@@ -333,6 +333,149 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
         pad_inches=0.05,
     )
     plt.show()
+#%% now, do single runs    
+
+mass_bins = 6
+zobs = zbins_ctr
+# make a unique halo array for each redshift
+mhalos = np.geomspace(1e10, 1e13, mass_bins)
+mhalos = np.broadcast_to(mhalos, (len(zobs), mhalos.size)) * u.Msun
+print(zobs)
+print(mhalos[0])
+####
+n_sfr = 1.2
+r_disk_sfr =0.05
+kappa_sfr = 1.0
+####
+param_txt =  f"KS_kappa{str(kappa_sfr).replace('.', 'p')}_" + f"n{str(n_sfr).replace('.', 'p')}_" + f"r{str(r_disk_sfr).replace('.', 'p')}"
+    
+file = (
+    "./runs/smhm_2phase_redshift_scan_"
+    f"{param_txt}.h5"
+)
+
+if not os.path.exists(file):
+    print("running 2-phase model grid...", file)
+    redshift_variation, zsims = run_2phase_model_redshift_grid(
+        observe_at=zobs,  # redshift we want to observe
+        mhalos=mhalos,
+        write_to_file=file,
+        disk_scale_length=r_disk_sfr,
+        KS_n=n_sfr,
+        KS_kappa_s=kappa_sfr,
+    )
+
+
+
+f = h5py.File(file, "r")
+smhm_normalized = f["SMHM"]  # smhm is already normalized by baryon fractions
+mhalo_obs = f["Mhalo_obs"]
+mstar = f["Mstar_obs"]
+mism = f["MISM_obs"]
+zs = f["redshifts"][:]
+sfr = f["SFR_obs"]
+mmetal_cgm = f["MMetals_obs"]
+rvirs = virial_radius(zs, mhalo_obs * u.Msun)  # virial radius in kpc
+halo_Tvirs = virial_T(mhalo_obs * u.Msun, rvirs)  # virial temperature in K
+print(f.keys())
+print(f["redshifts"][:])
+
+
+fig, ax = plt.subplots(2, 1, figsize=(5, 6.5), dpi=300, sharex=True, sharey="row")
+ax = ax.flatten()
+plt.subplots_adjust(hspace=0.05)
+# get a colormap from cmasher
+cmap = plt.get_cmap("Set1")
+colors = cmap(np.linspace(0, 1, len(zs)))
+Tvir_max = 1e6 * u.K
+# loop through redshift and plot mgas/mstar vs mstar
+for i, z in enumerate(zs):
+    Tvirs = halo_Tvirs[i]
+    mask = Tvirs < Tvir_max
+
+    ax[0].plot(
+        mstar[i],
+        mism[i] / mstar[i],
+    
+        color=colors[i],
+    )
+
+    ax[0].scatter(
+        mstar[i][mask],
+        mism[i][mask] / mstar[i][mask],
+        s=30,
+        color=colors[i],
+        edgecolor="k",
+        zorder=3,
+        label=f"{z:.1f}",
+    )
+
+
+    t_depletion = mism[i] / sfr[i]
+    sSFR_Gyr = sfr[i] / mstar[i]  # Gyr^-1
+    sSFR_yr = sSFR_Gyr * 1e-9
+    ax[1].plot(
+        mstar[i],
+        sSFR_yr,
+        color=colors[i],
+    )
+    ax[1].scatter(
+        mstar[i][mask], sSFR_yr[mask], s=30, color=colors[i], edgecolor="k", zorder=3
+    )
+
+# make a line passing through (8.7, 0.322and (10.35, -0.5) and extend it to the left and right
+
+# Calculate the slope and intercept in log-log space
+x1, y1 = 8.7, 0.2
+x2, y2 = 10.35, -0.4
+
+# Generate x values spanning the plot range
+x_vals = np.linspace(6, 12, 100)
+# Compute corresponding y values for the line in log-log space
+slope = (y2 - y1) / (x2 - x1)
+y_vals = y1 + slope * (x_vals - x1)
+
+ax[0].plot(
+    10**x_vals,
+    10**y_vals,
+    ls="-",
+    color="k",
+    lw="4",
+    alpha=0.5,
+    zorder=1,
+)
+# put a text label near this line 
+ax[0].text(0.85, 0.22, r"Calette+18, $z\sim 0$", transform=ax[0].transAxes, fontsize=8, rotation=-35, va="center", ha="right")
+
+ax[0].legend(
+    ncols=4,
+    frameon=False,
+    bbox_to_anchor=(-0.05, 1.011),
+    loc="lower left",
+    title=r"redshift $z$",
+    fontsize=10,
+)
+
+ax[0].set(xscale="log", yscale="log", ylabel=r"$M_{\rm {ISM}}/M_\star$")
+ax[1].set(
+    xscale="log",
+    yscale="log",
+    xlabel=r"$M_\star$ [M$_\odot$]",
+    ylabel=r"sSFR [yr$^{-1}$]",
+    # xlim=(8e6, 8e11),
+)
+
+
+# add text for the KS parameters used
+ax[0].text(0.25,1.05, rf"KS: $\kappa={kappa_sfr}$, $n={n_sfr}$, $r_{{\rm disk}}={r_disk_sfr} R_{{\rm vir}}$", transform=ax[0].transAxes, fontsize=10, va="bottom", ha="left")
+
+# plt.savefig(
+#     f"./figures/KS_ism_gas_fraction_rdisk_scan/{j:02d}_ism_gas_fractions_{param_txt}.png",
+#     dpi=200,
+#     bbox_inches="tight",
+#     pad_inches=0.05,
+# )
+plt.show()
 # %%
 
 z_sun = 0.0134
