@@ -17,7 +17,7 @@ from astropy.table import Table
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 plt.rcParams.update(
     {
-        "text.usetex": True,
+        # "text.usetex": True,
         # "font.family": "Helvetica",
         "font.family": "serif",
         "mathtext.fontset": "cm",
@@ -335,7 +335,7 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
     plt.show()
 #%% now, do single runs    
 
-mass_bins = 6
+mass_bins = 10
 zobs = zbins_ctr
 # make a unique halo array for each redshift
 mhalos = np.geomspace(1e10, 1e13, mass_bins)
@@ -343,9 +343,9 @@ mhalos = np.broadcast_to(mhalos, (len(zobs), mhalos.size)) * u.Msun
 print(zobs)
 print(mhalos[0])
 ####
-n_sfr = 1.2
-r_disk_sfr =0.05
-kappa_sfr = 1.0
+n_sfr = 1.4
+r_disk_sfr =0.04
+kappa_sfr = 2
 ####
 param_txt =  f"KS_kappa{str(kappa_sfr).replace('.', 'p')}_" + f"n{str(n_sfr).replace('.', 'p')}_" + f"r{str(r_disk_sfr).replace('.', 'p')}"
     
@@ -476,7 +476,7 @@ ax[0].text(0.25,1.05, rf"KS: $\kappa={kappa_sfr}$, $n={n_sfr}$, $r_{{\rm disk}}=
 #     pad_inches=0.05,
 # )
 plt.show()
-# %%
+# %% metallicity plot
 
 z_sun = 0.0134
 fig2, ax2 = plt.subplots(figsize=(4.5, 3.5), dpi=300)
