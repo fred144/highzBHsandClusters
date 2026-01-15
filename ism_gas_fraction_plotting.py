@@ -36,7 +36,7 @@ plt.rcParams.update(
         "ytick.minor.visible": True,
     }
 )
-#%%
+# %%
 # standard flat cosmology
 H0 = 70
 Omegam0 = 0.3
@@ -95,6 +95,7 @@ def vcirc_from_virial_T(Tvir, mu=0.59):
     mp = consts.m_p
     return np.sqrt((2 * kb * Tvir) / (mu * mp)).to(u.km / u.s)
 
+
 zbins_str = [
     "0.2 < z < 0.5",
     # "0.5 < z < 0.8",
@@ -152,18 +153,23 @@ mhalos = np.broadcast_to(mhalos, (len(zobs), mhalos.size)) * u.Msun
 print(zobs)
 print(mhalos[0])
 
+# kappa_sfr = 0.1
+# kapppa_sfrs = np.geomspace(0.01, 10, 20)
 kappa_sfr = 0.1
 # n_sfrs = np.linspace(1.3, 1.5, 10)
-r_disk_sfrs = np.geomspace(0.001, 0.01, 15)
-n_sfr = 1.5
-for j,r_disk_sfr in enumerate(r_disk_sfrs):
+# r_disk_sfrs = np.geomspace(0.011, 0.1, 15)
+r_disk_sfr = 0.02
+# n_sfr = 1.5
+n_sfrs = np.linspace(1.0, 2.0, 20)
+for j, n_sfr in enumerate(n_sfrs, start=15):
 
-    param_txt =  f"KS_kappa{str(kappa_sfr).replace('.', 'p')}_" + f"n{str(n_sfr).replace('.', 'p')}_" + f"r{str(r_disk_sfr).replace('.', 'p')}"
-        
-    file = (
-        "./runs/smhm_2phase_redshift_scan_"
-        f"{param_txt}.h5"
+    param_txt = (
+        f"KSv2_kappa{str(kappa_sfr).replace('.', 'p')}_"
+        + f"n{str(n_sfr).replace('.', 'p')}_"
+        + f"r{str(r_disk_sfr).replace('.', 'p')}"
     )
+
+    file = "./runs/smhm_2phase_redshift_scan_" f"{param_txt}.h5"
 
     if not os.path.exists(file):
         print("running 2-phase model grid...", file)
@@ -175,8 +181,6 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
             KS_n=n_sfr,
             KS_kappa_s=kappa_sfr,
         )
-
-
 
     f = h5py.File(file, "r")
     smhm_normalized = f["SMHM"]  # smhm is already normalized by baryon fractions
@@ -190,7 +194,6 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
     halo_Tvirs = virial_T(mhalo_obs * u.Msun, rvirs)  # virial temperature in K
     print(f.keys())
     print(f["redshifts"][:])
-
 
     # # write to file
     # file_baseline = "./runs/smhm_baseline_redshift_latest_more_info.h5"
@@ -207,7 +210,6 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
     # mism_baseline = f_baseline["MISM_obs"]
     # sfr_baseline = f_baseline["SFR_obs"]
 
-
     fig, ax = plt.subplots(2, 1, figsize=(5, 6.5), dpi=300, sharex=True, sharey="row")
     ax = ax.flatten()
     plt.subplots_adjust(hspace=0.05)
@@ -223,7 +225,6 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
         ax[0].plot(
             mstar[i],
             mism[i] / mstar[i],
-        
             color=colors[i],
         )
         # ax[1].plot(
@@ -231,7 +232,7 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
         #     mism_baseline[i] / mstar_baseline[i],
         #     color=colors[i],
         # )
-        
+
         ax[0].scatter(
             mstar[i][mask],
             mism[i][mask] / mstar[i][mask],
@@ -242,7 +243,7 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
             label=f"{z:.1f}",
         )
         # ax[1].scatter(
-        #     mstar_baseline[i][mask],    
+        #     mstar_baseline[i][mask],
         #     mism_baseline[i][mask] / mstar_baseline[i][mask],
         #     s=30,
         #     color=colors[i],
@@ -259,9 +260,14 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
             color=colors[i],
         )
         ax[1].scatter(
-            mstar[i][mask], sSFR_yr[mask], s=30, color=colors[i], edgecolor="k", zorder=3
+            mstar[i][mask],
+            sSFR_yr[mask],
+            s=30,
+            color=colors[i],
+            edgecolor="k",
+            zorder=3,
         )
-        
+
         # t_depletion_baseline = mism_baseline[i] / sfr_baseline[i]
         # sSFR_Gyr_baseline = sfr_baseline[i] / mstar_baseline[i]  # Gyr^-1
         # sSFR_yr_baseline = sSFR_Gyr_baseline * 1e-9
@@ -278,7 +284,6 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
         #     edgecolor="k",
         #     zorder=3,
         # )
-
 
     # make a line passing through (8.7, 0.322and (10.35, -0.5) and extend it to the left and right
 
@@ -301,8 +306,17 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
         alpha=0.5,
         zorder=1,
     )
-    # put a text label near this line 
-    ax[0].text(0.85, 0.22, r"Calette+18, $z\sim 0$", transform=ax[0].transAxes, fontsize=8, rotation=-35, va="center", ha="right")
+    # put a text label near this line
+    ax[0].text(
+        0.85,
+        0.22,
+        r"Calette+18, $z\sim 0$",
+        transform=ax[0].transAxes,
+        fontsize=8,
+        rotation=-35,
+        va="center",
+        ha="right",
+    )
 
     ax[0].legend(
         ncols=4,
@@ -322,18 +336,25 @@ for j,r_disk_sfr in enumerate(r_disk_sfrs):
         # xlim=(8e6, 8e11),
     )
 
-
     # add text for the KS parameters used
-    ax[0].text(0.25,1.05, rf"KS: $\kappa={kappa_sfr}$, $n={n_sfr}$, $r_{{\rm disk}}={r_disk_sfr} R_{{\rm vir}}$", transform=ax[0].transAxes, fontsize=10, va="bottom", ha="left")
+    ax[0].text(
+        0.25,
+        1.05,
+        rf"KS: $\kappa={kappa_sfr:.3f}$, $n={n_sfr:.3f}$, $r_{{\rm disk}}={r_disk_sfr:.3f} R_{{\rm vir}}$",
+        transform=ax[0].transAxes,
+        fontsize=10,
+        va="bottom",
+        ha="left",
+    )
 
     plt.savefig(
-        f"./figures/KS_ism_gas_fraction_rdisk_scan/{j:02d}_ism_gas_fractions_{param_txt}.png",
+        f"./figures/KS_ism_gas_fraction_n_scan_v2/{j:02d}_ism_gas_fractions_{param_txt}.png",
         dpi=200,
         bbox_inches="tight",
         pad_inches=0.05,
     )
     plt.show()
-#%% now, do single runs    
+# %% now, do single runs
 
 mass_bins = 10
 zobs = zbins_ctr
@@ -343,16 +364,17 @@ mhalos = np.broadcast_to(mhalos, (len(zobs), mhalos.size)) * u.Msun
 print(zobs)
 print(mhalos[0])
 ####
-n_sfr = 1.4
-r_disk_sfr =0.04
-kappa_sfr = 2
+n_sfr = 1.5
+r_disk_sfr = 0.02
+kappa_sfr = 0.1
 ####
-param_txt =  f"KS_kappa{str(kappa_sfr).replace('.', 'p')}_" + f"n{str(n_sfr).replace('.', 'p')}_" + f"r{str(r_disk_sfr).replace('.', 'p')}"
-    
-file = (
-    "./runs/smhm_2phase_redshift_scan_"
-    f"{param_txt}.h5"
+param_txt = (
+    f"KS_kappa{str(kappa_sfr).replace('.', 'p')}_"
+    + f"n{str(n_sfr).replace('.', 'p')}_"
+    + f"r{str(r_disk_sfr).replace('.', 'p')}"
 )
+
+file = "./runs/smhm_2phase_redshift_scan_" f"{param_txt}.h5"
 
 if not os.path.exists(file):
     print("running 2-phase model grid...", file)
@@ -364,7 +386,6 @@ if not os.path.exists(file):
         KS_n=n_sfr,
         KS_kappa_s=kappa_sfr,
     )
-
 
 
 f = h5py.File(file, "r")
@@ -396,7 +417,6 @@ for i, z in enumerate(zs):
     ax[0].plot(
         mstar[i],
         mism[i] / mstar[i],
-    
         color=colors[i],
     )
 
@@ -409,7 +429,6 @@ for i, z in enumerate(zs):
         zorder=3,
         label=f"{z:.1f}",
     )
-
 
     t_depletion = mism[i] / sfr[i]
     sSFR_Gyr = sfr[i] / mstar[i]  # Gyr^-1
@@ -444,8 +463,17 @@ ax[0].plot(
     alpha=0.5,
     zorder=1,
 )
-# put a text label near this line 
-ax[0].text(0.85, 0.22, r"Calette+18, $z\sim 0$", transform=ax[0].transAxes, fontsize=8, rotation=-35, va="center", ha="right")
+# put a text label near this line
+ax[0].text(
+    0.85,
+    0.22,
+    r"Calette+18, $z\sim 0$",
+    transform=ax[0].transAxes,
+    fontsize=8,
+    rotation=-35,
+    va="center",
+    ha="right",
+)
 
 ax[0].legend(
     ncols=4,
@@ -467,7 +495,15 @@ ax[1].set(
 
 
 # add text for the KS parameters used
-ax[0].text(0.25,1.05, rf"KS: $\kappa={kappa_sfr}$, $n={n_sfr}$, $r_{{\rm disk}}={r_disk_sfr} R_{{\rm vir}}$", transform=ax[0].transAxes, fontsize=10, va="bottom", ha="left")
+ax[0].text(
+    0.25,
+    1.05,
+    rf"KS: $\kappa={kappa_sfr:.4f}$, $n={n_sfr:.4f}$, $r_{{\rm disk}}={r_disk_sfr:.4f} R_{{\rm vir}}$",
+    transform=ax[0].transAxes,
+    fontsize=10,
+    va="bottom",
+    ha="left",
+)
 
 # plt.savefig(
 #     f"./figures/KS_ism_gas_fraction_rdisk_scan/{j:02d}_ism_gas_fractions_{param_txt}.png",
