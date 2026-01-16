@@ -364,8 +364,8 @@ mhalos = np.broadcast_to(mhalos, (len(zobs), mhalos.size)) * u.Msun
 print(zobs)
 print(mhalos[0])
 ####
-n_sfr = 1.5
-r_disk_sfr = 0.02
+n_sfr = 1.3
+r_disk_sfr = 0.04
 kappa_sfr = 0.1
 ####
 param_txt = (

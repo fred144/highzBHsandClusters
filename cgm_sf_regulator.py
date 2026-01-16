@@ -1134,15 +1134,23 @@ class CGMRegulator:
         # star formation (KS-like) -- do unitless arithmetic (Msun, kpc)
         r_disk_kpc = self.disk_scale * halo_rvir_kpc
         sigma0 = m_ism / (2.0 * np.pi * (r_disk_kpc**2))  # Msun / kpc^2
-        #### new definition
-        A1 = 1e-12 # msun/yr/kpc^2
-        Sigma1 = 1 * u.Msun / u.kpc**2
-        Sigma2 = (1 * u.Msun / u.pc**2).to(u.Msun / u.kpc**2)
-        A2 = A1 * (Sigma2 / Sigma1) ** self.ks_n  # msun/
-        Asfr = 2 * np.pi * self.ks_kappa_s *A2 
         
-        dot_m_star = Asfr * (r_disk_kpc**2 / self.ks_n**2) * (sigma0 / Sigma2.value) ** self.ks_n  # Msun / year 
+        sigma0_msun_per_pc2 = (sigma0 * u.Msun / u.kpc**2).to(u.Msun / u.pc**2).value
+        Asfr = 1.8e-4
+        prefac = 2 * np.pi * (r_disk_kpc / self.ks_n)**2
+        dot_m_star = prefac * Asfr * (sigma0_msun_per_pc2**self.ks_n)  # Msun / yr 
         dot_m_star *= 1e9  # convert to Msun / Gyr
+        dot_m_star *=self.ks_kappa_s
+        
+        #### new definition
+        # A1 = 1e-12 # msun/yr/kpc^2
+        # Sigma1 = 1 * u.Msun / u.kpc**2
+        # Sigma2 = (1 * u.Msun / u.pc**2).to(u.Msun / u.kpc**2)
+        # A2 = A1 * (Sigma2 / Sigma1) ** self.ks_n  # msun/
+        # Asfr = 2 * np.pi * self.ks_kappa_s *A2 
+        
+        # dot_m_star = Asfr * (r_disk_kpc**2 / self.ks_n**2) * (sigma0 / Sigma2.value) ** self.ks_n  # Msun / year 
+        # dot_m_star *= 1e9  # convert to Msun / Gyr
         
         # Asfr = 1e-12 * self.ks_kappa_s * 1e9  # msun / Gyr / kpc^2 
         # dot_m_star = (
