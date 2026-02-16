@@ -1102,9 +1102,7 @@ class CGMRegulator:
             ## here we use virial temperature to define a virial energy to define a 
             c_sound_cm_s_Tvir = np.sqrt(kb_erg_per_K * halo_vir_temp_K / mu_g) 
             c_sound_cm_s = c_sound_cm_s_Tvir
-      
         else:    
-        
             # compute sound speed from e_per_mass (erg/g) -> cm/s
             c_sound_cm_s = np.sqrt(max(e_per_mass_erg_per_g, 0.0))
             # c_sound_kms = c_sound_cm_s / cm_per_km

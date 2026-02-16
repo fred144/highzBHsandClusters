@@ -148,7 +148,7 @@ for zb in zbins_str:
 zbins_ctr = zbins_ctr[::-1]
 zbins_ctr.append(0.01)  # this is the lowest redshift bin
 
-# %%
+# %% this if looping through KS parameters for param variation studies
 mass_bins = 10
 zobs = zbins_ctr
 # make a unique halo array for each redshift
