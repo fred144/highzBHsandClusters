@@ -86,36 +86,14 @@ class CoolingFunctionInterpolator:
 # lambda_value = interpolator.cooling_function(1e4, 0.7)
 
 
-def custom_mass_loading(mhalo, A=10, alpha=-1.4):
+def custom_mass_loading(mhalo, A=10, alpha=-0.7):
     """mass loading factor as a function of halo mass"""
     return A * (mhalo / (1e10 * u.solMass)) ** alpha
 
 
 def custom_energy_loading(mhalo_z0, A=0.10, alpha=-0.5):
-    """energy loading fact or as a function of halo mass"""
-    eta_e = A * (mhalo_z0 / (1e12 * u.solMass)) ** alpha
-    if np.any(eta_e > 1):
-        eta_e = np.where(eta_e > 1, 1, eta_e)
-    else:  # it's a float
-        if eta_e > 1:
-            eta_e = 1
-    return eta_e
-
-
-def vcirc_energy_loading(halo_vcirc, alpha_e=0.1):
-    eta_e = alpha_e * (halo_vcirc.value / 200) ** (-3 / 2)
-
-    # if eta e > 1 set to 1, halo_vcirc can be float or array
-    if np.any(eta_e > 1):
-        eta_e = np.where(eta_e > 1, 1, eta_e)
-    else:  # it's a float
-        if eta_e > 1:
-            eta_e = 1
-    return eta_e
-
-
-def vcirc_mass_loading(halo_vcirc, alpha_m=9):
-    return alpha_m * (halo_vcirc.value / 200) ** (-3 / 2)
+    """energy loading factor as a function of halo mass"""
+    return A * (mhalo_z0 / (1e12 * u.solMass)) ** alpha
 
 
 def t_ff(r, Rvir, mhalo):
@@ -133,6 +111,26 @@ def t_ff(r, Rvir, mhalo):
     G = consts.G
     v_circ = np.sqrt(G * mhalo / Rvir) * 1.3
     return r / v_circ
+
+
+def format_sci_notation(value: float, decimals: int = 2) -> str:
+    """
+    Formats a float into scientific notation LaTeX-style for matplotlib.
+
+    Args:
+        value (float): The number to format.
+        decimals (int): Number of decimal places for the coefficient.
+
+    Returns:
+        str: A LaTeX-formatted string in scientific notation.
+    """
+    if value == 0:
+        return f"${0:.{decimals}f}$"
+
+    exponent = int(f"{value:.0e}".split("e")[1])
+    coefficient = value / (10**exponent)
+    formatted = f"{coefficient:.{decimals}f} \\times 10^{{{exponent}}}"
+    return formatted
 
 
 def depletion_time(z, mstar, exp, dep_time_norm):
@@ -210,11 +208,8 @@ def halo_infall_dekel(z, mhalo):
         * ((1 + z) / 3) ** (2.25)
         * u.Gyr ** (-1)
     ).to(u.solMass / u.Gyr)
-    try:
-        if mdot <= 0:
-            print("____", mhalo)
-    except:
-        pass
+    if mdot <= 0:
+        print("____", mhalo)
 
     return mdot
 
@@ -238,7 +233,7 @@ def halo_infall_fakhouri(z, mhalo):
 
 
 def virial_T(mhalo, Rvir):
-    """Halo fp
+    """Halo virial temp
 
     Args:
         mhalo (_type_): halo mass
@@ -270,7 +265,7 @@ def density0(mCGM, r0, Rvir, alpha=1.4):
     )
 
 
-def halo_mass_growth_fakhouri(t, mass):
+def halo_mass_growth(t, mass):
     """
     # Halo mass evolution called by initial_mhalo to
     # estimate initial halo mass at arbitrary redshift
@@ -285,82 +280,7 @@ def halo_mass_growth_fakhouri(t, mass):
     return mhalo_dot
 
 
-def halo_mass_growth_dekel(t, mass):
-    """
-    # Halo mass evolution called by initial_mhalo to
-    # estimate initial halo mass at arbitrary redshift
-    """
-    mhalo = mass * u.solMass
-    #    z = np.sqrt((28/t) - 1) - 1 # cosmological redshift
-    if t > 13.47:  # 13.4 is the age of the universe in Gyr
-        t = 13.466983947061877
-    z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
-    mhalo_dot = halo_infall_dekel(z, mhalo)
-
-    return mhalo_dot
-
-
-def halo_mass_evol_fakhouri(t, mass):
-    """
-    # Halo mass evolution called by
-    # initial_mhalo to estimate initial halo mass at arbitrary redshift
-    """
-    mhalo = mass * u.solMass
-    #    z = np.sqrt((28/t) - 1) - 1 # cosmological redshift
-    z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
-    mhalo_dot = halo_infall_fakhouri(z, mhalo)
-    return -mhalo_dot
-
-
-def halo_mass_evol_dekel(t, mass):
-    """
-    # Halo mass evolution called by
-    # initial_mhalo to estimate initial halo mass at arbitrary redshift
-    """
-    mhalo = mass * u.solMass
-    #    z = np.sqrt((28/t) - 1) - 1 # cosmological redshift
-    z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
-    mhalo_dot = halo_infall_dekel(z, mhalo)
-    return -mhalo_dot
-
-
-def initial_mhalo_fakhouri(mhalo_z0, time_interval):
-    """finds initial halo mass at the left edge of the time interval
-
-    Args:
-        mhalo_z0 (_type_): _description_
-        time_interval (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-
-    mass_initial = np.array([mhalo_z0.value])
-    time_at_z0 = LCDM.age(0.001).value
-    time_interval = (time_interval[0], time_at_z0)
-    sol_0 = solve_ivp(halo_mass_evol_fakhouri, time_interval, mass_initial)
-    return sol_0.y[0][-1]  # return the last value of the solution
-
-
-def initial_mhalo_dekel(mhalo_z0, time_interval):
-    """finds initial halo mass at the left edge of the time interval
-
-    Args:
-        mhalo_z0 (_type_): _description_
-        time_interval (_type_): _description_
-
-    Returns:
-        _type_: _description_
-    """
-
-    mass_initial = np.array([mhalo_z0.value])
-    time_at_z0 = LCDM.age(0.001).value
-    time_interval = (time_interval[0], time_at_z0)
-    sol_0 = solve_ivp(halo_mass_evol_dekel, time_interval, mass_initial)
-    return sol_0.y[0][-1]  # return the last value of the solution
-
-
-def mhalo_at_z0_dekel(mhalo_at_z, z_obs):
+def mhalo_at_z0(mhalo_at_z, z_obs):
     """Finds the halo mass at z=0.0001 given its mass at a specified redshift.
 
     Args:
@@ -373,24 +293,7 @@ def mhalo_at_z0_dekel(mhalo_at_z, z_obs):
     time_interval = (LCDM.age(z_obs).value, LCDM.age(0.0001).value)
     # print(time_interval)
     mass_initial = np.array([mhalo_at_z.value])
-    sol_0 = solve_ivp(halo_mass_growth_dekel, time_interval, mass_initial)
-    return sol_0.y[0][-1]  # return the last value of the solution
-
-
-def mhalo_at_z0_fakhouri(mhalo_at_z, z_obs):
-    """Finds the halo mass at z=0.0001 given its mass at a specified redshift.
-
-    Args:
-        mhalo_at_z (_type_): Halo mass at the observed redshift.
-        z_obs (_type_): Observed redshift.
-
-    Returns:
-        _type_: Halo mass at z=0.0001.
-    """
-    time_interval = (LCDM.age(z_obs).value, LCDM.age(0.0001).value)
-    # print(time_interval)
-    mass_initial = np.array([mhalo_at_z.value])
-    sol_0 = solve_ivp(halo_mass_growth_dekel, time_interval, mass_initial)
+    sol_0 = solve_ivp(halo_mass_growth, time_interval, mass_initial)
     return sol_0.y[0][-1]  # return the last value of the solution
 
 
@@ -479,7 +382,7 @@ def rho_gas_0(gas_frac, rho_crit, delta_c, b, c):
     return prefactor * integral_result**-1
 
 
-def rho_gas_makino(r, Mgas, Mbaryon, Mvir, z_red, halo_temp, Delc=200):
+def rho_gas(r, Mgas, Mbaryon, Mvir, z_red, halo_temp, Delc=200):
     """gas denisity profile of the CGM mkino et al 2020
 
     Args:
@@ -620,54 +523,12 @@ def circular_velocity(mhalo, Rvir):
     return np.sqrt(G * mhalo / Rvir).to(u.km / u.s)
 
 
-def exponential_disk(r, r_trunc_disk, rho_disk_central):
-    """
-    simple exponential disk profile
-    r_trunc_disk is usually 0.02 of rvir
-
-    """
-    return rho_disk_central * np.exp(-r / r_trunc_disk)
+def vcirc_energy_loading(halo_vcirc, alpha_e=0.1):
+    return alpha_e * (halo_vcirc.value / 200) ** (-3 / 2)
 
 
-def disk_central_density(m_total, r_trunc):
-    """
-    for stellar disk or ISM disk?
-    """
-    Sigma0 = m_total / (2 * np.pi * r_trunc**2)
-    return Sigma0
-
-
-def sfr_density_prof(r, r_trunc, Sigma0_gas, Sigma0_star, n=1.5):
-    """
-    units of msun/gyr/kpc^2
-    is the integrand to solve for the total SFR
-    """
-    # solve for Sigma_gas, Sigma_star
-    Sigma_gas = exponential_disk(r, r_trunc, Sigma0_gas)
-    Sigma_star = exponential_disk(r, r_trunc, Sigma0_star)
-    norm = 10  # *u.Msun / u.Gyr / u.kpc**2
-    sfr_prof = norm * (Sigma_gas / Sigma_star) ** n
-    return sfr_prof
-
-
-def format_sci_notation(value: float, decimals: int = 2) -> str:
-    """
-    Formats a float into scientific notation LaTeX-style for matplotlib.
-
-    Args:
-        value (float): The number to format.
-        decimals (int): Number of decimal places for the coefficient.
-
-    Returns:
-        str: A LaTeX-formatted string in scientific notation.
-    """
-    if value == 0:
-        return f"${0:.{decimals}f}$"
-
-    exponent = int(f"{value:.0e}".split("e")[1])
-    coefficient = value / (10**exponent)
-    formatted = f"{coefficient:.{decimals}f} \\times 10^{{{exponent}}}"
-    return formatted
+def vcirc_mass_loading(halo_vcirc, alpha_m=9):
+    return alpha_m * (halo_vcirc.value / 200) ** (-3 / 2)
 
 
 #######
@@ -711,44 +572,25 @@ class CGMRegulatorBaseline:
         self,
         mhalo_z0,
         time_interval,
-        tstep=1,
+        tstep=None,
+
         eta_z=0.3,
         verbose=False,
         dep_time_norm=0.4,
         cooling_dynamic_time_norm=1,
-        disk_scale_length=0.02,
-        KS_n=1.5,
-        KS_kappa_s=0.1,
-        r_bulge=1,
-        updated_halo_infall=False,
-        updated_loadings=False,
-        updated_SF_law=False,
     ):
         self.mhalo_z0 = mhalo_z0
         self.verbose = verbose
         # self.mhalo_init = mhalo_init
+
+        self.time_interval = time_interval
+
         self.eta_z = eta_z
         self.tstep = tstep
-        # if time_interval is an array, use that array directly
-        if isinstance(time_interval, (list, np.ndarray)) and len(time_interval) > 2:
-            self.time_interval = (time_interval[0], time_interval[-1])
-            self.evaluation_time_array = np.array(time_interval)
-            self.eval_time_is_vector = True
-        else:
-            self.time_interval = time_interval
-            self.evaluation_time_array = (self.time_interval[0], self.time_interval[-1])
-            self.eval_time_is_vector = False
+        self.evaluation_time_array = np.arange(
+            self.time_interval[0], self.time_interval[1], self.tstep
+        )
 
-        self.updated_halo_infall = updated_halo_infall
-        self.updated_loadings = updated_loadings
-
-        self.updated_SF_law = updated_SF_law
-
-        # KS law star formation
-        self.ks_n = KS_n
-        self.ks_kappa_s = KS_kappa_s
-        self.r_bulge = r_bulge  # kpc
-        self.disk_scale = disk_scale_length
         # here we set some of the model params that are not the key parameters
         self.metal_yield = 0.02
 
@@ -828,15 +670,14 @@ class CGMRegulatorBaseline:
         cgm_temp = ((e_cgm / m_cgm) * (self.mu / self.kb)).to(u.K)
 
         # #XXX: overwrite mass loading as you are stepping through the ODE
-        # mass and energy loading
-        if self.updated_loadings:
-            self.eta_m = vcirc_mass_loading(halo_vcirc, alpha_m=0.1)
-            self.eta_e = vcirc_energy_loading(halo_vcirc, alpha_e=0.1)
-        else:
-            self.eta_m = custom_mass_loading(m_halo, A=10, alpha=-0.7)
-            self.eta_e = custom_energy_loading(m_halo, A=0.1, alpha=-0.4)
+        self.eta_m = custom_mass_loading(m_halo, A=10, alpha=-0.7)
+        self.eta_e = custom_energy_loading(m_halo, A=0.1, alpha=-0.4)
+ 
 
-        if self.eta_e > 1:  # physical
+        # self.eta_m =  vcirc_mass_loading(halo_vcirc)
+        # self.eta_e = vcirc_energy_loading(halo_vcirc)
+
+        if self.eta_e > 1:
             self.eta_e = 1
 
         t_depletion = depletion_time(z, m_star, self.exp, self.dep_time_norm)
@@ -883,7 +724,7 @@ class CGMRegulatorBaseline:
         t_ejection = min(
             max(t_ejection.value, self.t_eject_lim_norm * t_dynamical.value),
             t_dynamical.value,
-        )  # clamp it between 0.1 t_dyn and t_dyn
+        )  # limit
         t_ejection = t_ejection * u.Gyr
         # print("t_ej", t_ejection)
 
@@ -967,28 +808,15 @@ class CGMRegulatorBaseline:
         if t_depletion < 0:
             raise ValueError("Negative depletion time")
 
-        if self.updated_SF_law:
-            # star formation rate using sigma, KS law, adopted 	arXiv:2309.07957 Vallini
-            r_disk = self.disk_scale * halo_rvir.value  # kpc
-
-            sigma0 = m_gas.value / (2 * np.pi * r_disk**2)  # msun / kpc^2
-            Asfr = 1e-12 * self.ks_kappa_s * 1e9  # msun / Gyr / kpc^2
-            dot_m_star = (
-                Asfr * sigma0**self.ks_n * (2 * np.pi * r_disk**2) / self.ks_n**2
-            )
-            dot_m_sfr = dot_m_star * (u.solMass / u.Gyr)  # new SFR
-        else:
-            dot_m_sfr = m_gas / t_depletion
-            dot_m_sfr = dot_m_sfr.to(u.solMass / u.Gyr)
+        dot_m_sfr = m_gas / t_depletion
 
         # eq 11 ish, basically the same as dot(Mgas =  Mcgmcool)
         dot_m_gas = (dot_m_cgm_cool - dot_m_sfr * (1 + self.eta_m)).to(
             u.solMass / u.Gyr
         )
-        if self.updated_halo_infall:
-            dot_m_halo = halo_infall_fakhouri(z, m_halo)
-        else:
-            dot_m_halo = halo_infall_dekel(z, m_halo)
+        dot_m_sfr = dot_m_sfr.to(u.solMass / u.Gyr)
+
+        dot_m_halo = halo_infall_fakhouri(z, m_halo)
 
         dot_m_cgm_in = self.fb * dot_m_halo  # eq. 6
         # if (ode_mode == False) & (t > 0.5) & (t < 0.55):
@@ -1172,10 +1000,7 @@ class CGMRegulatorBaseline:
 
     def run_halo(self):
         print("self.time_interval", self.time_interval, "tstep", self.tstep)
-        if self.updated_halo_infall:
-            mhalo_t0 = initial_mhalo_fakhouri(self.mhalo_z0, self.time_interval)
-        else:
-            mhalo_t0 = initial_mhalo_dekel(self.mhalo_z0, self.time_interval)
+        mhalo_t0 = initial_mhalo(self.mhalo_z0, self.time_interval)
 
         # mhalo_t0 = self.mhalo_init.value
         rvir = virial_radius(z=self.zfinal, mhalo=mhalo_t0 * u.solMass).to(u.kpc)
@@ -1224,39 +1049,33 @@ class CGMRegulatorBaseline:
                 masses_initial[9],
             )
         )
-
-        if (self.tstep != 1) & (not self.eval_time_is_vector):
-            print(
-                "Not using array using ", self.time_interval, " with tstep ", self.tstep
-            )
-            # t = self.evaluation_time_array
+        # if time interval is a tuple, automatic timesteping
+        if isinstance(self.time_interval, tuple) and self.tstep is None:
             solution = solve_ivp(
                 self.mass_evolution,
                 self.time_interval,
                 masses_initial,
-                step=self.tstep,
-                # method="RK45",
-                rtol=1e-3,
+                # rtol=1e-5,
             )
-        elif (self.tstep == 1) & (self.eval_time_is_vector):
-            print("evaluating at suplied array", self.evaluation_time_array)
-            solution = solve_ivp(
-                fun=self.mass_evolution,
-                t_span=self.time_interval,
-                y0=masses_initial,
-                t_eval=self.evaluation_time_array,
-                # method="RK45",
-                rtol=1e-3,
-                # atol=1e-6,
-            )
-        else:
-            print("Using adaptive default tstep")
+        elif isinstance(self.time_interval, tuple) and self.tstep is not None:
+            t = self.evaluation_time_array
             solution = solve_ivp(
                 self.mass_evolution,
                 self.time_interval,
                 masses_initial,
                 # method="RK45",
-                rtol=1e-3,
+                # rtol=1e-5,
+                t_eval=t,
+            )
+        elif isinstance(self.time_interval, np.ndarray):  # if time interval is an array, use that for t_eval
+            time_interval = (self.time_interval[0], self.time_interval[-1])
+            t = self.time_interval
+            solution = solve_ivp(
+                self.mass_evolution,
+                time_interval,
+                masses_initial,
+                # rtol=1e-5,
+                t_eval=t,
             )
 
         adaptive_tsteps = solution.t
@@ -1660,9 +1479,7 @@ def plot_halo_diagnostics(results, derived_quant, title: str):
             adaptive_z[-1].value,
             format_sci_notation(mhalo_t[-1], 2),
             0,
-            format_sci_notation(
-                mhalo_at_z0_fakhouri(mhalo_t[-1] * u.Msun, adaptive_z[-1]), 2
-            ),
+            format_sci_notation(mhalo_at_z0(mhalo_t[-1] * u.Msun, adaptive_z[-1]), 2),
         )
     )
     # put text on the corner left
@@ -1799,7 +1616,7 @@ def plot_halo_diagnostics(results, derived_quant, title: str):
 # eta_z = 0.2
 
 # model = CGMRegulatorBaseline(
-#     mhalo_z0, t_span, eta_z=eta_z, cooling_dynamic_time_norm=1, updated_loadings=True
+#     mhalo_z0, t_span, eta_z=eta_z, cooling_dynamic_time_norm=1
 # )
 # run = model.run_halo()
 # results = model.get_results()

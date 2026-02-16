@@ -1,7 +1,7 @@
 # %%
 import numpy as np
 import matplotlib.pyplot as plt
-import matplotlib
+
 from scipy.integrate import solve_ivp
 from astropy import cosmology
 import scipy
@@ -268,38 +268,44 @@ def dotE_CGM_ej_simplified(m_cgm_hot, T_CGM, T_vir, mhalo):
     mu = 0.6
     kb = consts.k_B
     mp = consts.m_p
-    rvir = virial_radius(z, mhalo)
+    rvir = virial_radius(z, mhalo).to(u.kpc)
 
     dotE = (
         (kb / (mu * mp)) ** (3 / 2) * (m_cgm_hot / rvir) * (T_CGM - T_vir) * T_CGM**0.5
     )
 
-    if dotE < 0:
-        dotE = 0 * u.erg / u.Gyr
+    # if dotE < 0:
+    #     dotE = 0 * u.erg / u.Gyr
 
     return dotE.to(u.erg / u.Gyr)
 
 
-def dotE_CGM_in(mhalo, T_CGM, z, mcgm_hot):
+def dotE_CGM_in(mhalo, T_CGM, T_vir, z, mcgm_hot):
     kb = consts.k_B
     mp = consts.m_p
     mu = 3 / 5
-
-    mdot_h = mdot_halo(z, mhalo)
-    rvir = virial_radius(z, mhalo)
-    T_vir = virial_T(mhalo, rvir)
-
-    temp_terms = T_vir**2 / ((T_CGM - T_vir) * T_CGM**0.5)
     prefac = (kb / (mu * mp)) ** 0.5
+    mdot_h = mdot_halo(z, mhalo).to(u.Msun / u.Gyr)
+    rvir = virial_radius(z, mhalo).to(u.kpc)
+   
+    
+    # print(mdot_h, rvir, T_vir)
+    
+    temp_terms = T_vir**2 / ((T_CGM - T_vir) * T_CGM**0.5)
+   
+    
+    
+    # apply the same units to test as temp_terms
 
-    if temp_terms < 0:
-        temp_terms = 0 * temp_terms
+
+    # if temp_terms < 0:
+    #     temp_terms = 0 * temp_terms
 
     dot_e_cgm_in = prefac * temp_terms * f_baryon**2 * mdot_h**2 * (rvir / mcgm_hot)
 
-    if dot_e_cgm_in < 0:
-        dot_e_cgm_in = 0 * u.erg / u.Gyr
-
+    # if dot_e_cgm_in < 0:
+    #     dot_e_cgm_in = 0 * u.erg / u.Gyr
+    # print(dot_e_cgm_in)
     return dot_e_cgm_in.to(u.erg / u.Gyr)
 
 
@@ -316,8 +322,14 @@ def calculate_dotE_grid(
     alpha,
 ):
     """Calculate dotE_CGM grid for parameter ranges"""
+    
     M_grid, T_grid = np.meshgrid(m_cgm_hot_range, T_CGM_range)
     dotE_grid = np.zeros((n, n))
+
+    dot_SNe_grid = np.zeros((n, n))
+    dot_ej_grid = np.zeros((n, n))
+    dotE_acc_grid = np.zeros((n, n))
+    dotE_cool_grid = np.zeros((n, n))
 
     for i in range(n):
         for j in range(n):
@@ -336,7 +348,7 @@ def calculate_dotE_grid(
             #     halo_Tvir_K,
             # )
             dotE_acc = dotE_CGM_in(
-                m_halo, 10 ** T_grid[i, j] * u.K, z, 10 ** M_grid[i, j] * u.Msun
+                m_halo, 10 ** T_grid[i, j] * u.K, halo_Tvir_K, z, 10 ** M_grid[i, j] * u.Msun
             )
             dotE_cool = cooling_rate_CGM(
                 10 ** M_grid[i, j] * u.Msun,
@@ -351,8 +363,20 @@ def calculate_dotE_grid(
             # print(dotE_SNe.unit, dotE_acc.unit, dotE_cool.unit, dotE_ej.unit)
 
             dotE_grid[i, j] = (dotE_SNe + dotE_acc - dotE_cool - dotE_ej).value
+            dot_SNe_grid[i, j] = dotE_SNe.value
+            dot_ej_grid[i, j] = dotE_ej.value
+            dotE_acc_grid[i, j] = dotE_acc.value
+            dotE_cool_grid[i, j] = dotE_cool.value
 
-    return M_grid, T_grid, dotE_grid
+    return (
+        M_grid,
+        T_grid,
+        dotE_grid,
+        dot_SNe_grid,
+        dot_ej_grid,
+        dotE_acc_grid,
+        dotE_cool_grid,
+    )
 
 
 ### fixed properties of our analysis
@@ -399,17 +423,19 @@ dot_mstar_derived = (
 n = 128
 m_cgm_hot_range = np.linspace(7, 11, n)
 T_CGM_range = np.linspace(4.6, 7.5, n)
-M_grid, T_grid, dotE_grid = calculate_dotE_grid(
-    n,
-    m_cgm_hot_range,
-    T_CGM_range,
-    dot_mstar_derived,
-    m_halo,
-    halo_Tvir_K,
-    halo_rvir_kpc,
-    r0,
-    metallicity,
-    alpha,
+M_grid, T_grid, dotE_grid, dot_SNe_grid, dot_ej_grid, dotE_acc_grid, dotE_cool = (
+    calculate_dotE_grid(
+        n,
+        m_cgm_hot_range,
+        T_CGM_range,
+        dot_mstar_derived,
+        m_halo,
+        halo_Tvir_K,
+        halo_rvir_kpc,
+        r0,
+        metallicity,
+        alpha,
+    )
 )
 
 
@@ -488,7 +514,7 @@ plt.show()
 
 # %% PAPER FIGURE
 
-mhalo_z0 = 1e13 * u.Msun
+mhalo_z0 = 1e11 * u.Msun
 t_span = (0.1, 13.3)  # gyrs
 model_ = CGMRegulator(
     mhalo_z0,
@@ -515,6 +541,8 @@ m_cgm_hot_actual = results_["m_cgm_hot"]  ##
 m_cgm_cold_actual = results_["m_cgm_cold"]
 m_cgm_total_actual = m_cgm_hot_actual + m_cgm_cold_actual
 
+e_cgm_total_actual = results_["egy_cgm"]  ##
+
 # get rates for cgm masses
 dot_m_cgm_hot_actual = derived_["dot_m_cgm_hot"]
 dot_m_cgm_cold_actual = derived_["dot_m_cgm_cold"]
@@ -536,30 +564,32 @@ dot_e_cgm_actual = (
     + derived_["dot_e_ism_wind"]
 )
 
+# %%
 
-
-z2s_to_try = [15, 13, 12, 11, 10, 9.5, 9, 8, 7, 6, 5, 3, 2.2, 2, 1, 0.8, 0.5, 0.3, 0.2, 0.1]
-n_inset = 128
+z2s_to_try = [15,12,11,10,9,6,7,6,5,2, 1, 0.8, 0.5, 0.3, 0.2, 0.1]
+n_inset = 64
 lin_threshold_factor = 1e-10
 z1 = 9  # high z
 # z2 = 0.3
-for i, z2 in enumerate(z2s_to_try[:]):
+for i, z2 in enumerate(z2s_to_try):
     fig, ax = plt.subplots(
-        6,
-        1,
-        figsize=(5, 9),
+        3,
+        2,
+        figsize=(10, 6),
         dpi=300,
         sharex=True,
-        gridspec_kw={"height_ratios": [3, 1.5, 1.5, 1.25, 1.25, 1.25]},
+        gridspec_kw={"height_ratios": [1, 1, 1]},
     )
+    ax = ax.flatten()
     plt.subplots_adjust(hspace=0.05)
 
     # add an inset for the equilibrium analysis to the right
 
-    inset_hiz = ax[0].inset_axes([1.15, -0.5, 1.0, 1.35])
-    inset_loz = ax[0].inset_axes([1.15, -2.0, 1.0, 1.35])
-    cbar_ax = ax[0].inset_axes([1.15, -2.35, 1, 0.1])
-    cbar_ax_hiz = ax[0].inset_axes([1.15, 0.9, 1, 0.1])
+    inset_hiz = ax[0].inset_axes([0, -4.45, 1.0, 1.5])
+    cbar_ax_hiz = ax[0].inset_axes([0, -2.85, 1, 0.1])
+
+    inset_loz = ax[1].inset_axes([0, -4.45, 1.0, 1.5])
+    cbar_ax = ax[1].inset_axes([0, -2.85, 1, 0.1])
 
     star_color = "darkorange"
     ism_color = "tab:blue"
@@ -594,17 +624,31 @@ for i, z2 in enumerate(z2s_to_try[:]):
     # add the energy over time
     ax[2].plot(
         time_gyr,
-        dot_e_cgm_actual,
-        color="tab:brown",
+        e_cgm_total_actual,
+        color="tab:purple",
         lw=lw,
-    )
-    ax[2].plot(
-        time_gyr, -dot_e_cgm_actual, color="tab:brown", lw=lw, ls="--", alpha=0.2
     )
     ax[2].set(
         xscale="log",
         yscale="log",
-        ylabel=r"$\dot{E}_{\mathrm{CGM}}$" + "\n" + r" [erg Gyr$^{-1}$]",
+        ylabel=r"$E_{\mathrm{CGM}}$ [erg]",
+        xlabel=r"$t_{\rm univ}$ [Gyr]",
+        ylim=(1e53, None),
+    )
+
+    ax[3].plot(
+        time_gyr,
+        dot_e_cgm_actual,
+        color="tab:brown",
+        lw=lw,
+    )
+    ax[3].plot(
+        time_gyr, -dot_e_cgm_actual, color="tab:brown", lw=lw, ls="--", alpha=0.2
+    )
+    ax[3].set(
+        xscale="log",
+        yscale="log",
+        ylabel=r"$\dot{E}_{\mathrm{CGM}}$" + r" [erg Gyr$^{-1}$]",
         xlim=(0.14, 13),
         ylim=(1e53, None),
     )
@@ -659,23 +703,28 @@ for i, z2 in enumerate(z2s_to_try[:]):
     ax[1].set(
         xscale="log",
         yscale="log",
-        ylabel=r"mass rate" "\n" " [M$_{\odot}$ Gyr$^{-1}$]",
+        ylabel=r"mass rate" " [M$_{\odot}$ Gyr$^{-1}$]",
         xlim=(0.14, 13),
         ylim=(1e5, None),
     )
 
     # plot evolution of f_prevent and metallicity in the next two panels
-    ax[3].plot(time_gyr, f_prevent_actual, color="tab:green", lw=lw)
-    ax[3].set(
-        xscale="log", ylabel=r"$f_{\mathrm{prevent}}$", ylim=(2e-3, 2), yscale="log"
-    )
-    ax[4].plot(time_gyr, metallicity_actual, color="tab:purple", lw=lw)
+    ax[4].plot(time_gyr, f_prevent_actual, color="tab:green", lw=lw)
     ax[4].set(
         xscale="log",
+        ylabel=r"$f_{\mathrm{prevent}}$",
+        ylim=(2e-3, 2),
         yscale="log",
-        ylabel=r"$Z_{\mathrm{CGM}}$ [$Z_{\odot}$]",
-        ylim=(1e-3, 1),
+        xlabel=r"$t_{\rm univ}$ [Gyr]",
     )
+    # ax[4].plot(time_gyr, metallicity_actual, color="tab:purple", lw=lw)
+    # ax[4].set(
+    #     xscale="log",
+    #     yscale="log",
+    #     ylabel=r"$Z_{\mathrm{CGM}}$ [$Z_{\odot}$]",
+    #     ylim=(1e-3, 1),
+    #     xlabel=r"$t_{\rm univ}$ [Gyr]",
+    # )
 
     # then temp on the bottom row
     ax[5].plot(
@@ -687,7 +736,7 @@ for i, z2 in enumerate(z2s_to_try[:]):
     ax[5].set(
         xscale="log",
         yscale="log",
-        xlabel=r"$t$ [Gyr]",
+        xlabel=r"$t_{\rm univ}$ [Gyr]",
         ylabel=r"$T$ [K]",
         ylim=(5e4, 2e7),
     )
@@ -703,7 +752,15 @@ for i, z2 in enumerate(z2s_to_try[:]):
     ax2.set_xlabel(r"$z$", labelpad=8)
     ax2.minorticks_off()
     ax[0].minorticks_on()
-    ax[2].minorticks_on()
+
+    axz1 = ax[1].twiny()
+    axz1.set_xscale("log")
+    axz1.set_xlim(ax[1].get_xlim())
+    axz1.set_xticks(t_ticks)
+    axz1.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
+    axz1.set_xlabel(r"$z$", labelpad=8)
+    ax[1].minorticks_on()
+    axz1.minorticks_off()
 
     for axes in ax:
         for line in axes.lines:
@@ -762,9 +819,18 @@ for i, z2 in enumerate(z2s_to_try[:]):
     m_cgm_hot_range_inset_z2 = np.linspace(4.9, np.log10(m_halo_z2.value), n_inset)
     T_CGM_range_inset = np.linspace(5.5, 7.5, n_inset)
     T_CGM_range_inset_z2 = np.linspace(5.5, 7.5, n_inset)
+  
 
     ######
-    M_grid_inset, T_grid_inset, dotE_grid_inset = calculate_dotE_grid(
+    (
+        M_grid_inset,
+        T_grid_inset,
+        dotE_grid_inset,
+        dot_SNe_grid_inset,
+        dot_ej_grid_inset,
+        dotE_acc_grid_inset,
+        dotE_cool_grid_inset,
+    ) = calculate_dotE_grid(
         n_inset,
         m_cgm_hot_range_inset,
         T_CGM_range_inset,
@@ -776,7 +842,15 @@ for i, z2 in enumerate(z2s_to_try[:]):
         metallicity_z1,
         alpha,
     )
-    M_grid_inset_z2, T_grid_inset_z2, dotE_grid_inset_z2 = calculate_dotE_grid(
+    (
+        M_grid_inset_z2,
+        T_grid_inset_z2,
+        dotE_grid_inset_z2,
+        dot_SNe_grid_inset_z2,
+        dot_ej_grid_inset_z2,
+        dotE_acc_grid_inset_z2,
+        dotE_cool_grid_inset_z2,
+    ) = calculate_dotE_grid(
         n_inset,
         m_cgm_hot_range_inset_z2,
         T_CGM_range_inset_z2,
@@ -909,6 +983,9 @@ for i, z2 in enumerate(z2s_to_try[:]):
     cbar_highz.ax.xaxis.set_ticks_position("top")
     cbar_highz.ax.xaxis.set_label_position("top")
 
+    cbar_inset.ax.xaxis.set_ticks_position("top")
+    cbar_inset.ax.xaxis.set_label_position("top")
+
     inset_loz.set(
         xlabel=r"$\log T_{\mathrm{CGM}}~ {\rm [K]}$",
         ylabel=r"$\log M_{\mathrm{CGM, hot}}~ {\rm [M_\odot]}$",
@@ -993,10 +1070,177 @@ for i, z2 in enumerate(z2s_to_try[:]):
         verticalalignment="top",
         horizontalalignment="left",
     )
-    savetext = f"./figures/equilibrium_scan_1e13/{i:02d}.png"
+    savetext = f"./figures/equilibrium_scan_1e11/{i:02d}.png"
     plt.savefig(savetext, dpi=200, bbox_inches="tight", pad_inches=0.05)
     plt.show()
 
 # make a plot of all the relavant rates
 
 # %%
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.colors import SymLogNorm
+
+
+def plot_phase_grid_2x5_from_grids_with_actual(
+    grids_z1,
+    grids_z2,
+    extent,
+    Mcgm_hot_actual_z1,
+    Tcgm_actual_z1,
+    Mcgm_hot_actual_z2,
+    Tcgm_actual_z2,
+    z1,
+    z2,
+    linthresh_prefactor=1e-10,
+    cmap="coolwarm",
+    figsize=(15, 6),
+    alpha=0.9,
+    lw_actual=2.0,
+):
+    """
+    2x5 phase-space grid with per-panel normalization and actual CGM tracks.
+
+    grids_z1, grids_z2 : dict
+        Keys:
+            'dotE'
+            'dot_SNe'
+            'dot_ej'
+            'dotE_acc'
+            'dotE_cool'
+        Values: 2D numpy arrays
+
+    extent : (xmin, xmax, ymin, ymax)
+
+    Mcgm_hot_actual_* : 1D array
+        log M_cgm,hot trajectory
+
+    Tcgm_actual_* : 1D array
+        log T_cgm trajectory
+    """
+
+    keys = [
+        "dotE",
+        "dot_SNe",
+        "dot_ej",
+        "dotE_acc",
+        "dotE_cool",
+    ]
+
+    titles = [
+        r"$\dot{E}_{\rm CGM}$",
+        r"$\dot{E}_{\rm SNe}$",
+        r"$\dot{E}_{\rm ej}$",
+        r"$\dot{E}_{\rm acc}$",
+        r"$\dot{E}_{\rm cool}$",
+    ]
+
+    fig, axes = plt.subplots(
+        2,
+        5,
+        figsize=figsize,
+        dpi=300,
+    )
+    for ax in axes[0, :]:
+        ax.axhline(Mcgm_hot_actual_z1, color="k", ls="-", lw=1, alpha=0.75)
+        ax.axvline(Tcgm_actual_z1, color="k", ls="-", lw=1, alpha=0.75)
+    for ax in axes[1, :]:
+        ax.axhline(Mcgm_hot_actual_z2, color="k", ls="-", lw=1, alpha=0.75)
+        ax.axvline(Tcgm_actual_z2, color="k", ls="-", lw=1, alpha=0.75)
+    for row, (grids, Mcgm, Tcgm) in enumerate(
+        [
+            (grids_z1, Mcgm_hot_actual_z1, Tcgm_actual_z1),
+            (grids_z2, Mcgm_hot_actual_z2, Tcgm_actual_z2),
+        ]
+    ):
+        for col, key in enumerate(keys):
+            ax = axes[row, col]
+            grid = grids[key]
+
+            vmax = np.nanmax(np.abs(grid))
+            linthresh = linthresh_prefactor * vmax
+
+            norm = SymLogNorm(
+                linthresh=linthresh,
+                vmin=-vmax,
+                vmax=vmax,
+                base=10,
+            )
+
+            im = ax.imshow(
+                grid.T,
+                origin="lower",
+                extent=extent,
+                aspect="auto",
+                cmap=cmap,
+                norm=norm,
+                alpha=alpha,
+            )
+
+            # ---- actual CGM trajectory overlay ----
+
+            if row == 0:
+                ax.set_title(titles[col], fontsize=13)
+
+            if col == 0:
+                ax.set_ylabel(
+                    r"$\log M_{\rm CGM,hot}$"
+                    + (
+                        "\n(z = {})".format(z1) if row == 0 else "\n(z = {})".format(z2)
+                    ),
+                    fontsize=12,
+                )
+
+            cbar = fig.colorbar(im, ax=ax, pad=0.01)
+            cbar.ax.tick_params(labelsize=8)
+
+    axes[-1, 2].set_xlabel(r"$\log T_{\rm CGM}$", fontsize=12)
+
+    fig.tight_layout()
+    return fig, axes
+
+
+# %%
+grids_z1 = dict(
+    dotE=dotE_grid_inset,
+    dot_SNe=dot_SNe_grid_inset,
+    dot_ej=dot_ej_grid_inset,
+    dotE_acc=dotE_acc_grid_inset,
+    dotE_cool=dotE_cool_grid_inset,
+)
+
+grids_z2 = dict(
+    dotE=dotE_grid_inset_z2,
+    dot_SNe=dot_SNe_grid_inset_z2,
+    dot_ej=dot_ej_grid_inset_z2,
+    dotE_acc=dotE_acc_grid_inset_z2,
+    dotE_cool=dotE_cool_grid_inset_z2,
+)
+
+fig, axes = plot_phase_grid_2x5_from_grids_with_actual(
+    grids_z1=grids_z1,
+    grids_z2=grids_z2,
+    extent=(
+        T_CGM_range_inset[0],
+        T_CGM_range_inset[-1],
+        m_cgm_hot_range_inset[0],
+        m_cgm_hot_range_inset[-1],
+    ),
+    Mcgm_hot_actual_z1=np.log10(m_cgm_hot_z1.value),
+    Tcgm_actual_z1=np.log10(T_CGM_z1.value),
+    Mcgm_hot_actual_z2=np.log10(m_cgm_hot_z2.value),
+    Tcgm_actual_z2=np.log10(T_CGM_z2.value),
+    linthresh_prefactor=1e-8,
+    z1=z1,
+    z2=z2,
+)
+
+vert_line_temp_terms = T_vir_actual[idx_z2] ** 2 / (
+    (Tcgm_actual[idx_z2] - T_vir_actual[idx_z2]) * Tcgm_actual[idx_z2] ** 0.5
+)
+
+axes[1, 2].axvline(np.log10(T_vir_actual[idx_z2]), ls="--", color="k") 
+
+test = Tcgm_actual[idx_z2] * 1.6
+axes[1,3].axvline(np.log10(T_vir_actual[idx_z2]), ls="--", color="k")
+plt.show()

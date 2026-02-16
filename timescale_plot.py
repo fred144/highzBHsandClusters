@@ -67,9 +67,9 @@ baseline_model = CGMRegulatorBaseline(
     mhalo_z0,
     t_span,
     tstep=0.0011,
-    updated_halo_infall=False,
-    updated_loadings=False,
-    updated_SF_law=False,
+    # updated_halo_infall=False,
+    # updated_loadings=False,
+    # updated_SF_law=False,
     verbose=False,
 )
 baseline_model.run_halo()
@@ -264,9 +264,9 @@ for mhalo in halo_masses:
     baseline_model = CGMRegulatorBaseline(
         mhalo,
         time_interval=(0.1, 13.3),
-        updated_halo_infall=False,
-        updated_loadings=False,
-        updated_SF_law=False,
+        # updated_halo_infall=False,
+        # updated_loadings=False,
+        # updated_SF_law=False,
         # tstep=0.0001,
     )
     baseline_model.run_halo()
@@ -614,10 +614,10 @@ plt.show()
 import cmasher as cmr
 
 # colormap
-# cmap = matplotlib.cm.get_cmap("coolwarm")  # cmr.tropical_r
-# cmap_segmented = matplotlib.cm.get_cmap("coolwarm", num_halos)
-cmap = cmr.guppy_r
-cmap_segmented = cmr.get_sub_cmap("cmr.guppy_r", 0, 1, N=num_halos)
+cmap = matplotlib.cm.get_cmap("coolwarm")  # cmr.tropical_r
+cmap_segmented = matplotlib.cm.get_cmap("coolwarm", num_halos)
+# cmap = cmr.guppy_r
+# cmap_segmented = cmr.get_sub_cmap("cmr.guppy_r", 0, 1, N=num_halos)
 # segmented the colormap based on the number of halo samples
 num_halos = len(halo_masses)
 colors = [cmap_segmented(i) for i in range(num_halos)]
@@ -626,8 +626,15 @@ norm = matplotlib.colors.LogNorm(
 )
 sm = plt.cm.ScalarMappable(cmap=cmap_segmented, norm=norm)
 
-fig, ax = plt.subplots(4, 1, figsize=(4.25, 8.5), dpi=300, sharex=True, sharey=True)
-plt.subplots_adjust(hspace=0.05, wspace=0.03)
+# Toggle for two-panel plot
+PLOT_TWO_PANEL = False
+
+if PLOT_TWO_PANEL:
+    fig, ax = plt.subplots(4, 2, figsize=(8.5, 8.5), dpi=300, sharex="col", sharey="row")
+    plt.subplots_adjust(hspace=0.05, wspace=0.03)
+else:
+    fig, ax = plt.subplots(4, 1, figsize=(5, 8.5), dpi=300, sharex=True, sharey=True)
+    plt.subplots_adjust(hspace=0.05)
 
 threshold = 1e6  # K, example threshold for virial temperature
 
@@ -649,138 +656,146 @@ for res in halo_results:
     t_cgm = res["cgm_temp"]
 
     mask = t_vir > threshold
+    ax_row = [ax[0, 0], ax[1, 0], ax[2, 0], ax[3, 0]] if PLOT_TWO_PANEL else [ax[0], ax[1], ax[2], ax[3]]
+    
     if np.sum(mask) > 0:
         begin = np.argmax(np.argwhere(t_vir < threshold).flatten())
-        ax[0].plot(times[: begin + 2], y_cool[: begin + 2], ls="-", lw=2, color=color)
-        ax[1].plot(times[: begin + 2], y_eject[: begin + 2], ls="-", lw=2, color=color)
-        ax[2].plot(times[: begin + 2], y_in[: begin + 2], ls="-", lw=2, color=color)
-        ax[3].plot(times[: begin + 2], y_wind[: begin + 2], ls="-", lw=2, color=color)
+        ax_row[0].plot(times[: begin + 2], y_cool[: begin + 2], ls="-", lw=2, color=color)
+        ax_row[1].plot(times[: begin + 2], y_eject[: begin + 2], ls="-", lw=2, color=color)
+        ax_row[2].plot(times[: begin + 2], y_in[: begin + 2], ls="-", lw=2, color=color)
+        ax_row[3].plot(times[: begin + 2], y_wind[: begin + 2], ls="-", lw=2, color=color)
 
-        ax[0].plot(times[mask], y_cool[mask], ls="--", lw=2, color=color)
-        ax[1].plot(times[mask], y_eject[mask], ls="--", lw=2, color=color)
-        ax[2].plot(times[mask], y_in[mask], ls="--", lw=2, color=color)
-        ax[3].plot(times[mask], y_wind[mask], ls="--", lw=2, color=color)
+        ax_row[0].plot(times[mask], y_cool[mask], ls="--", lw=2, color=color)
+        ax_row[1].plot(times[mask], y_eject[mask], ls="--", lw=2, color=color)
+        ax_row[2].plot(times[mask], y_in[mask], ls="--", lw=2, color=color)
+        ax_row[3].plot(times[mask], y_wind[mask], ls="--", lw=2, color=color)
 
     else:
-        ax[0].plot(times, y_cool, ls="-", alpha=0.5, color=color)
-        ax[1].plot(times, y_eject, ls="-", alpha=0.5, color=color)
-        ax[2].plot(times, y_in, ls="-", alpha=0.5, color=color)
-        ax[3].plot(times, y_wind, ls="-", alpha=0.5, color=color)
+        ax_row[0].plot(times, y_cool, ls="-", alpha=0.5, color=color)
+        ax_row[1].plot(times, y_eject, ls="-", alpha=0.5, color=color)
+        ax_row[2].plot(times, y_in, ls="-", alpha=0.5, color=color)
+        ax_row[3].plot(times, y_wind, ls="-", alpha=0.5, color=color)
 
-# for res in halo_results_baseline:
-#     color = cmap(norm(res["mhalo"].value))
-#     times = res["sim_time"]
-#     redshift = cosmology.z_at_value(LCDM.age, times * u.Gyr).value
+if PLOT_TWO_PANEL:
+    for res in halo_results_baseline:
+        color = cmap(norm(res["mhalo"].value))
+        times = res["sim_time"]
+        redshift = cosmology.z_at_value(LCDM.age, times * u.Gyr).value
 
-#     dotE_tot = np.abs(
-#         res["dot_e_cgm_out"]
-#         + res["dot_e_cgm_in"]
-#         + res["dot_e_cgm_cooling"]
-#         + res["dot_e_ism_wind"]
-#     )
-#     y_eject = res["dot_e_cgm_out"] / dotE_tot
-#     y_cool = res["dot_e_cgm_cooling"] / dotE_tot
-#     y_in = res["dot_e_cgm_in"] / dotE_tot
-#     y_wind = res["dot_e_ism_wind"] / dotE_tot
-#     t_vir = res["t_vir"]
+        dotE_tot = np.abs(
+            res["dot_e_cgm_out"]
+            + res["dot_e_cgm_in"]
+            + res["dot_e_cgm_cooling"]
+            + res["dot_e_ism_wind"]
+        )
+        y_eject = res["dot_e_cgm_out"] / dotE_tot
+        y_cool = res["dot_e_cgm_cooling"] / dotE_tot
+        y_in = res["dot_e_cgm_in"] / dotE_tot
+        y_wind = res["dot_e_ism_wind"] / dotE_tot
+        t_vir = res["t_vir"]
 
-#     mask = t_vir > threshold
-#     if np.sum(mask) > 0:
-#         begin = np.argmax(np.argwhere(t_vir < threshold).flatten())
-#         ax[0, 1].plot(times[: begin + 2], y_cool[: begin + 2], ls="-", lw=2, color=color)
-#         ax[1, 1].plot(times[: begin + 2], y_eject[: begin + 2], ls="-", lw=2, color=color)
-#         ax[2, 1].plot(times[: begin + 2], y_in[: begin + 2], ls="-", lw=2, color=color)
-#         ax[3, 1].plot(times[: begin + 2], y_wind[: begin + 2], ls="-", lw=2, color=color)
+        mask = t_vir > threshold
+        if np.sum(mask) > 0:
+            begin = np.argmax(np.argwhere(t_vir < threshold).flatten())
+            ax[0, 1].plot(times[: begin + 2], y_cool[: begin + 2], ls="-", lw=2, color=color)
+            ax[1, 1].plot(times[: begin + 2], y_eject[: begin + 2], ls="-", lw=2, color=color)
+            ax[2, 1].plot(times[: begin + 2], y_in[: begin + 2], ls="-", lw=2, color=color)
+            ax[3, 1].plot(times[: begin + 2], y_wind[: begin + 2], ls="-", lw=2, color=color)
 
-#         ax[0, 1].plot(times[mask], y_cool[mask], ls="--", lw=2, color=color)
-#         ax[1, 1].plot(times[mask], y_eject[mask], ls="--", lw=2, color=color)
-#         ax[2, 1].plot(times[mask], y_in[mask], ls="--", lw=2, color=color)
-#         ax[3, 1].plot(times[mask], y_wind[mask], ls="--", lw=2, color=color)
-#     else:
-#         ax[0, 1].plot(times, y_cool, color=color, alpha=0.5)
-#         ax[1, 1].plot(times, y_eject, color=color, alpha=0.5)
-#         ax[2, 1].plot(times, y_in, color=color, alpha=0.5)
-#         ax[3, 1].plot(times, y_wind, color=color, alpha=0.5)
+            ax[0, 1].plot(times[mask], y_cool[mask], ls="--", lw=2, color=color)
+            ax[1, 1].plot(times[mask], y_eject[mask], ls="--", lw=2, color=color)
+            ax[2, 1].plot(times[mask], y_in[mask], ls="--", lw=2, color=color)
+            ax[3, 1].plot(times[mask], y_wind[mask], ls="--", lw=2, color=color)
+        else:
+            ax[0, 1].plot(times, y_cool, color=color, alpha=0.5)
+            ax[1, 1].plot(times, y_eject, color=color, alpha=0.5)
+            ax[2, 1].plot(times, y_in, color=color, alpha=0.5)
+            ax[3, 1].plot(times, y_wind, color=color, alpha=0.5)
 
-ax[0].set(
-    yscale="log",
-    ylabel=r"$\dot{E}_{\rm CGM, cool}/\dot{E}_{\rm CGM, added}$",
-    xlim=(0.08, 5),
-    ylim=(2e-3, 1),
-    xscale="log",
-)
-ax[1].set(yscale="log")
-ax[1].set(
-    yscale="log",
-    ylabel=r"$\dot{E}_{\rm CGM,ej}/\dot{E}_{\rm CGM, added}$",
-)
-ax[1].set(yscale="log")
-ax[2].set(
-    yscale="log",
-    ylabel=r"$\dot{E}_{\rm CGM,acc}/\dot{E}_{\rm CGM, added}$",
-)
-ax[2].set(yscale="log")
-ax[3].set(
-    yscale="log",
-    ylabel=r"$\dot{E}_{\rm SNe,wind}/\dot{E}_{\rm CGM, added}$",
-    xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
-)
-ax[3].set(
-    yscale="log",
-    xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
-)
+if PLOT_TWO_PANEL:
+    ax[0, 0].set(
+        yscale="log",
+        ylabel=r"$\dot{E}_{\rm CGM, cool}/\dot{E}_{\rm CGM, added}$",
+        xlim=(0.08, 5),
+        ylim=(2e-3, 0.9),
+        xscale="log",
+    )
+    ax[0, 1].set(yscale="log", xlim=(0.08, 5), xscale="log")
+    ax[1, 0].set(yscale="log", ylabel=r"$\dot{E}_{\rm CGM,ej}/\dot{E}_{\rm CGM, added}$")
+    ax[1, 1].set(yscale="log")
+    ax[2, 0].set(yscale="log", ylabel=r"$\dot{E}_{\rm CGM,in}/\dot{E}_{\rm CGM, added}$")
+    ax[2, 1].set(yscale="log")
+    ax[3, 0].set(
+        yscale="log",
+        ylabel=r"$\dot{E}_{\rm SNe,wind}/\dot{E}_{\rm CGM, added}$",
+        xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
+    )
+    ax[3, 1].set(
+        yscale="log",
+        xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
+    )
+    
 
+    ax[0, 0].text(
+        0.90,
+        0.15,
+        "this work",
+        transform=ax[0, 0].transAxes,
+        fontsize=12,
+        ha="right",
+        va="top",
+    )
+    ax[0, 1].text(
+        0.90,
+        0.15,
+        "baseline C23 model",
+        transform=ax[0, 1].transAxes,
+        fontsize=12,
+        ha="right",
+        va="top",
+    )
+else:
+    ax[0].set(
+        yscale="log",
+        ylabel=r"$\dot{E}_{\rm CGM, cool}/\dot{E}_{\rm CGM, added}$",
+        xlim=(0.08, 5),
+        ylim=(2e-3, 0.9),
+        xscale="log",
+    )
+    ax[1].set(yscale="log", ylabel=r"$\dot{E}_{\rm CGM,ej}/\dot{E}_{\rm CGM, added}$")
+    ax[2].set(yscale="log", ylabel=r"$\dot{E}_{\rm CGM,in}/\dot{E}_{\rm CGM, added}$")
+    ax[3].set(
+        yscale="log",
+        ylabel=r"$\dot{E}_{\rm SNe,wind}/\dot{E}_{\rm CGM, added}$",
+        xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
+    )
+
+for axes in (ax.flatten() if PLOT_TWO_PANEL else ax):
+    for line in axes.lines:
+        line.set_zorder(1)
+        
 # add colorbar for halo mass (log scale)
-cbar_ax = ax[1].inset_axes([0.3, 0.35, 0.6, 0.08])  # [x, y, width, height]
+if PLOT_TWO_PANEL:
+    cbar_ax = ax[0, 1].inset_axes([0.3, 0.35, 0.6, 0.08])
+else:
+    cbar_ax = ax[3].inset_axes([0.3, 0.35, 0.6, 0.08])  # [x, y, width, height]
 cbar = plt.colorbar(sm, cax=cbar_ax, orientation="horizontal")
 cbar.set_label(r"$M_{\rm halo} (z = 0) \ [{\rm M_\odot}]$")
 cbar.set_ticks(halo_masses.value)
 cbar.ax.set_xscale("log")
 
-# add twin redshift axis for the top row of plots (indices 0 and 1)
-for i in [0]:
-    t_ticks = np.array([0.14, 0.3, 0.5, 1, 2, 3, 5])
-    z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
-    ax2 = ax[0].twiny()
-    ax2.set_xscale("log")
-    ax2.set_xlim(ax[i].get_xlim())
-    ax2.set_xticks(t_ticks)
-    ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
-    ax2.set_xlabel(r"$z$", labelpad=8)
-    ax2.minorticks_off()
-    ax[i].minorticks_on()
 
-# # add a reference line for y = 1
-# for row in range(4):
-#     for col in range(2):
-#         ax[row, col].axhline(1, ls="-", lw=2, color="grey", alpha=0.5)
+# t_ticks = np.array([0.14, 0.3, 0.5, 1, 2, 3, 5])
+# z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
+# ax2 = ax[0, 0].twiny()
+# ax2.set_xscale("log")
+# ax2.set_xlim(ax[0, 0].get_xlim())
+# ax2.set_xticks(t_ticks)
+# ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
+# ax2.set_xlabel(r"$z$", labelpad=8)
+# ax2.minorticks_off()
+# ax[0, 0].minorticks_on()
 
-# for i in range(4):
-#     ax[i].axhline(0.5, ls="-", lw=2, color="grey", alpha=0.5)
-# add text
-ax[0].text(
-    0.90,
-    0.15,
-    "this work",
-    transform=ax[0].transAxes,
-    fontsize=12,
-    ha="right",
-    va="top",
-)
-# ax[0, 1].text(
-#     0.10,
-#     0.15,
-#     "baseline C23 model",
-#     transform=ax[0, 1].transAxes,
-#     fontsize=12,
-#     ha="left",
-#     va="top",
-# )
-
-
-for axes in ax.flatten():
-    for line in axes.lines:
-        line.set_zorder(1)
 
 # plt.savefig(
 #     "./figures/dotE_contribution_ratios.png",
@@ -788,7 +803,6 @@ for axes in ax.flatten():
 #     bbox_inches="tight",
 #     pad_inches=0.05,
 # )
-
 plt.show()
 # %%
 fig, ax = plt.subplots(1, 1, dpi=300, figsize=(4.5, 4), sharex="col", sharey="row")
@@ -822,3 +836,5 @@ ax.set(
     ylabel=r"$\rho_0 ~ [{\rm M_\odot ~kpc^{-3}}]$",
     ylim=(1e52, 1e56),
 )
+
+# %%

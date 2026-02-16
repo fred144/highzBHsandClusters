@@ -772,50 +772,55 @@ def sfr_density_prof(r, r_trunc, Sigma0_gas, Sigma0_star, n=1.5):
 class CGMRegulator:
     """CGM regulator with strictly SF feedback-driven winds
 
+    A regulator model.
 
     Args:
-            mhalo_z0 (_type_): _description_
-        time_interval (_type_): _description_
-        tstep (int, optional): _description_. Defaults to 1.
-        eta_z (float, optional): _description_. Defaults to 0.3.
-        verbose (bool, optional): _description_. Defaults to True.
-        dep_time_norm (float, optional): _description_. Defaults to 0.4.
-        cooling_dynamic_time_norm (int, optional): _description_. Defaults to 1.
-        disk_scale_length (float, optional): _description_. Defaults to 0.02.
-        KS_n (float, optional): _description_. Defaults to 1.5.
-        KS_kappa_s (float, optional): _description_. Defaults to 0.1.
-        r_bulge (int, optional): _description_. Defaults to 1.
-        dbug_norm_for_accretion_energy_rate (int, optional): _description_. Defaults to 1.
-        updated_halo_infall (bool, optional): _description_. Defaults to True.
-        updated_loadings (bool, optional): _description_. Defaults to True.
-        updated_2phase_CGM (bool, optional): _description_. Defaults to True.
-        updated_SF_law (bool, optional): _description_. Defaults to True.
-        add_f_prevent (bool, optional): _description_. Defaults to True.
-        alpha_m (float, optional): _description_. Defaults to 0.1.
-        alpha_e (float, optional): _description_. Defaults to 0.1.
+        mhalo_z0 (astropy.units.Quantity): Dark matter halo mass at z=0.
+        time_interval (tuple): Simulation time span in Gyr (t_start, t_end).
+        tstep (int, optional): Timestep for output in Gyr. If 1, uses adaptive stepping. Defaults to 1.
+        eta_z (float, optional): Metal loading factor (Z_out / Z_ISM ratio). Defaults to 0.3.
+        verbose (bool, optional): Enable detailed console output during integration. Defaults to False.
+        dep_time_norm (float, optional): Normalization factor for star formation depletion time. Defaults to 0.4. BUT only used if updated_SF_law is False.
+        cooling_dynamic_time_norm (float, optional): Cooling time prefactor for CGM. Defaults to 1.
+        disk_scale_length (float, optional): ISM disk scale radius as fraction of Rvir. Defaults to 0.02.
+        KS_n (float, optional): Kennicutt-Schmidt power-law index. Defaults to 1.5.
+        KS_kappa_s (float, optional): Star formation efficiency parameter. Defaults to 10.
+        r_bulge (float, optional): Bulge formation radius in kpc. Defaults to 1.
+        dbug_norm_for_accretion_energy_rate (float, optional): Debug flag for accretion energy (0-1). Defaults to 1.
+        dbug_norm_for_2_phase_CGM (float, optional): Debug flag to interpolate CGM phases (0-1). Defaults to 0.
+        updated_halo_infall (bool, optional): Use Fakhouri+2011 vs Dekel+2009 halo infall. Defaults to True.
+        updated_loadings (bool, optional): Use velocity-dependent vs mass-dependent wind loading. Defaults to True.
+        updated_2phase_CGM (bool, optional): Enable two-phase CGM model (hot/cold). Defaults to True.
+        updated_SF_law (bool, optional): Use Kennicutt-Schmidt vs depletion time SFR. Defaults to True.
+        add_f_prevent_floor (float, optional): Floor for infall prevention factor. Defaults to 0.1.
+        add_f_prevent_constant (float, optional): Override prevention factor with constant value. Defaults to None.
+        alpha_m (float, optional): Mass loading normalization parameter. Defaults to 0.1.
+        alpha_e (float, optional): Energy loading normalization parameter. Defaults to 0.1.
+        custom_cooling_params (tuple, optional): (T_threshold, T_slope) for custom cooling function where, beyond T_shrehold, the cooling rate is scaled by a power law with T_slope. Defaults to None, uses Sutherland & Dopita (1993) by defualt.
+        KS_parametrization (str, optional): Choice of KS law parameterization ('KS1998' or 'Vallini2024'). Defaults to 'KS1998'.
+        cooling_tables (str, optional): Choice of cooling tables ('SutherlandDopita93' or 'Wiersama09[work pending]'). Defaults to 'SutherlandDopita93'.
 
-    Yields:
-        _type_: _description_
-
+    Returns:
+        None: Results are stored in self.ode_results dictionary after calling run_halo().
 
     Example:
-        mhalo_z0 = 1e10 * u.Msun
-        t_span = (0.1, 1)  # gyrs
-        model = CGMRegulator(
-            mhalo_z0,
-            t_span,
-            eta_z=0.3,
-            disk_scale_length=0.02,
-        )
-        run_2phase = model.run_halo()
-
-        # get the mass and energy evolution
-        results_2phase = model.get_results()
-        print(results_2phase.keys())
-
-        # get derive quantities such as derivs or cooling rates
-        derived_2phase = model.get_derived_quantities()
-        print(derived_2phase.keys())
+        >>> mhalo_z0 = 1e10 * u.Msun
+        >>> t_span = (0.1, 1)  # gyrs
+        >>> model = CGMRegulator(
+        ...     mhalo_z0,
+        ...     t_span,
+        ...     eta_z=0.3,
+        ...     disk_scale_length=0.02,
+        ... )
+        >>> model.run_halo()
+        >>> 
+        >>> # Get the mass and energy evolution
+        >>> results = model.get_results()
+        >>> print(results.keys())
+        >>> 
+        >>> # Get derived quantities such as timescales or cooling rates
+        >>> derived = model.get_derived_quantities()
+        >>> print(derived.keys())
 
     """
 
@@ -825,18 +830,13 @@ class CGMRegulator:
         time_interval,
         tstep=1,
         eta_z=0.3,
-        verbose=True,
+        verbose=False,
         dep_time_norm=0.4,
         cooling_dynamic_time_norm=1,
         disk_scale_length=0.02,
         KS_n=1.5,
         KS_kappa_s=10,
         r_bulge=1,
-        # ep_bh_radeff=0.1,
-        # ep_bh_feedback_eff=0.02,
-        # bondi_boost=100,
-        # r_grav_physical=1,
-        # m_bh_seed = 1e2,
         dbug_norm_for_accretion_energy_rate=1,
         dbug_norm_for_2_phase_CGM=0,
         updated_halo_infall=True,
@@ -848,6 +848,14 @@ class CGMRegulator:
         alpha_m=0.1,
         alpha_e=0.1,
         custom_cooling_params=None,
+        KS_parametrization = "KS1998",
+        cooling_tables="SutherlandDopita93",
+        TEST_tej_Tvir_definition= False,
+        # ep_bh_radeff=0.1,                 # BH things not currently being used
+        # ep_bh_feedback_eff=0.02,
+        # bondi_boost=100,
+        # r_grav_physical=1,
+        # m_bh_seed = 1e2,
     ):
 
         # fmt: off
@@ -859,6 +867,8 @@ class CGMRegulator:
         self.updated_loadings = updated_loadings
         self.updated_2phase_CGM = updated_2phase_CGM
         self.updated_SF_law = updated_SF_law
+        
+        self.cooling_tables = cooling_tables
         
         self.evaluation_time_array = np.arange(
             self.time_interval[0], self.time_interval[1], self.tstep
@@ -891,10 +901,13 @@ class CGMRegulator:
         self.ks_n = KS_n
         self.ks_kappa_s = KS_kappa_s
         self.r_bulge = r_bulge  # kpc
+        self.KS_parametrization = KS_parametrization
         
         # feedback loadings
         self.eta_M = alpha_m
         self.eta_E = alpha_e
+
+        self.TEST_tej_Tvir_definition = TEST_tej_Tvir_definition
 
         # self.cooling_fn = cooling_fn_generator(
         #     "./tables/Lambda_tab_redshifts.npz"
@@ -915,7 +928,7 @@ class CGMRegulator:
         self.zfinal = cosmology.z_at_value(LCDM.age, time_interval[1] * u.Gyr)
         print("_________________________________________")
         print(
-            "Running models from z = {:.2f} to z = {:.2f}".format(
+            "+++ running a model from z = {:.2f} to z = {:.2f}".format(
                 self.zinit, self.zfinal
             )
         )
@@ -1085,9 +1098,17 @@ class CGMRegulator:
         dot_e_cgm_hot_loss_erg_per_Gyr = rad_loss_erg_per_s * sec_per_Gyr
 
         ### ejection timescale and limits
-        # compute sound speed from e_per_mass (erg/g) -> cm/s
-        c_sound_cm_s = np.sqrt(max(e_per_mass_erg_per_g, 0.0))
-        c_sound_kms = c_sound_cm_s / cm_per_km
+        if self.TEST_tej_Tvir_definition is True:
+            ## here we use virial temperature to define a virial energy to define a 
+            c_sound_cm_s_Tvir = np.sqrt(kb_erg_per_K * halo_vir_temp_K / mu_g) 
+            c_sound_cm_s = c_sound_cm_s_Tvir
+      
+        else:    
+        
+            # compute sound speed from e_per_mass (erg/g) -> cm/s
+            c_sound_cm_s = np.sqrt(max(e_per_mass_erg_per_g, 0.0))
+            # c_sound_kms = c_sound_cm_s / cm_per_km
+            
         # t_ejection = rvir / c_sound (in seconds -> Gyr)
         t_ejection_sec = (halo_rvir_kpc * kpc_to_cm) / max(c_sound_cm_s, vel_floor_kms * cm_per_km)
         t_ejection_Gyr = t_ejection_sec / sec_per_Gyr
@@ -1114,12 +1135,7 @@ class CGMRegulator:
         # total energy associated with that specific energy for the hot mass (erg)
         total_energy_erg = cgm_specific_e_erg_per_g * mass_hot_g
         # tcool (Gyr) = total_energy / dot_e_cgm_hot_loss (erg/Gyr)
-        if dot_e_cgm_hot_loss_erg_per_Gyr <= 0:
-            tcool_Gyr = (
-                (1.0 / LCDM.H(z=z)).to(u.Gyr).value
-            )  # fallback to Hubble time numeric
-        else:
-            tcool_Gyr = total_energy_erg / dot_e_cgm_hot_loss_erg_per_Gyr
+        tcool_Gyr = total_energy_erg / dot_e_cgm_hot_loss_erg_per_Gyr
 
         # prevent non-physical or negative
         tcool_Gyr = max(tcool_Gyr, time_floor_gyr)
@@ -1135,28 +1151,31 @@ class CGMRegulator:
         r_disk_kpc = self.disk_scale * halo_rvir_kpc
         sigma0 = m_ism / (2.0 * np.pi * (r_disk_kpc**2))  # Msun / kpc^2
         
-        sigma0_msun_per_pc2 = (sigma0 * u.Msun / u.kpc**2).to(u.Msun / u.pc**2).value
-        Asfr = 1.8e-4
-        prefac = 2 * np.pi * (r_disk_kpc / self.ks_n)**2
-        dot_m_star = prefac * Asfr * (sigma0_msun_per_pc2**self.ks_n)  # Msun / yr 
-        dot_m_star *= 1e9  # convert to Msun / Gyr
-        dot_m_star *=self.ks_kappa_s
-        
-        #### new definition
+        if self.KS_parametrization == "KS1998":
+            ### using original Kennicut law https://arxiv.org/pdf/astro-ph/9712213
+            Asfr = 2.5e-4   # msun/yr/kpc^2    
+            Sigma1 = 1 * u.Msun / u.pc**2
+            Sigma1_kpc2 = Sigma1.to(u.Msun / u.kpc**2)
+            dot_m_star = self.ks_kappa_s * Asfr * (sigma0/ Sigma1_kpc2.value) ** self.ks_n * (2 * np.pi * r_disk_kpc**2  / self.ks_n**2) # Msun / year
+            dot_m_star *=   1e9  # convert to msun/Gyr
+        elif self.KS_parametrization == "Vallini2024":
+            # vallini
+            Asfr = 1e-12 * self.ks_kappa_s * 1e9  # msun / Gyr / kpc^2 
+            dot_m_star = (
+                Asfr * (sigma0**self.ks_n) * (2.0 * np.pi * r_disk_kpc**2) / (self.ks_n**2)
+            )  # Msun / Gyr
+        else: 
+            raise ValueError(f"Invalid KS parametrization: {self.KS_parametrization}. Must be 'KS1998' or 'Vallini2024'")
+            
+            
+        #### gregdefinition
         # A1 = 1e-12 # msun/yr/kpc^2
         # Sigma1 = 1 * u.Msun / u.kpc**2
         # Sigma2 = (1 * u.Msun / u.pc**2).to(u.Msun / u.kpc**2)
         # A2 = A1 * (Sigma2 / Sigma1) ** self.ks_n  # msun/
         # Asfr = 2 * np.pi * self.ks_kappa_s *A2 
-        
         # dot_m_star = Asfr * (r_disk_kpc**2 / self.ks_n**2) * (sigma0 / Sigma2.value) ** self.ks_n  # Msun / year 
         # dot_m_star *= 1e9  # convert to Msun / Gyr
-        
-        # Asfr = 1e-12 * self.ks_kappa_s * 1e9  # msun / Gyr / kpc^2 
-        # dot_m_star = (
-        #     Asfr * (sigma0**self.ks_n) * (2.0 * np.pi * r_disk_kpc**2) / (self.ks_n**2)
-        # )  # Msun / Gyr
-
         if self.verbose:
             print(
                 f"dot_m_star inputs: Asfr={Asfr:.3e}, sigma0={sigma0:.3e}, ks_n={self.ks_n:.3e}, r_disk={r_disk_kpc:.3e}, m_ism={m_ism:.3e}"
@@ -1446,7 +1465,7 @@ class CGMRegulator:
             )
 
     def run_halo(self):
-        print("self.time_interval", self.time_interval, "tstep", self.tstep)
+        print("self.time_interval", self.time_interval, )
         if self.updated_halo_infall:
             mhalo_t0 = initial_mhalo_fakhouri(self.mhalo_z0, self.time_interval)
         else:
@@ -1558,7 +1577,7 @@ class CGMRegulator:
         egy_t = solution.y[7]  # energy gained from energy-loaded galactic winds
         egy_radloss_t = solution.y[8]  # energy lost due to cooling
         egy_eject_t = solution.y[9]  # energy ejected from the CGM
-        egy_accrete_t = solution.y[10]  # energy accreted from the IGM
+        egy_cgm_in_t = solution.y[10]  # energy accreted from the IGM
         egy_cgm_t = solution.y[11]  # total cgm energy
 
         metal_cgm_mass = mmetals_t / mcgm_t  # CGM metallicity ratio
@@ -1602,7 +1621,7 @@ class CGMRegulator:
         self.ode_results["egy_ism_wind"] = egy_t
         self.ode_results["egy_radloss"] = egy_radloss_t
         self.ode_results["egy_eject"] = egy_eject_t
-        self.ode_results["egy_accrete"] = egy_accrete_t
+        self.ode_results["egy_cgm_in"] = egy_cgm_in_t
         self.ode_results["egy_cgm"] = egy_cgm_t
         self.ode_results["metal_cgm_mass"] = metal_cgm_mass
         self.ode_results["metal_cgm_mass_sol"] = metal_cgm_mass_sol
@@ -1639,7 +1658,7 @@ class CGMRegulator:
                 self.ode_results["egy_ism_wind"],
                 self.ode_results["egy_radloss"],
                 self.ode_results["egy_eject"],
-                self.ode_results["egy_accrete"],
+                self.ode_results["egy_cgm_in"],
                 self.ode_results["egy_cgm"],
                 # self.ode_results["m_bh"],
                 # self.ode_results["egy_bh"],
@@ -1849,7 +1868,7 @@ def halo_timescales(results, derived_quant, title: str):
     egy_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
-    egy_accrete_t = results["egy_accrete"]
+    egy_cgm_in_t = results["egy_cgm_in"]
     egy_cgm_t = results["egy_cgm"]
     metal_cgm_mass = results["metal_cgm_mass"]
     metal_cgm_mass_sol = results["metal_cgm_mass_sol"]
@@ -2040,7 +2059,7 @@ def halo_normalized_rates(results, derived_quant, title: str):
     egy_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
-    egy_accrete_t = results["egy_accrete"]
+    egy_cgm_in_t = results["egy_cgm_in"]
     egy_cgm_t = results["egy_cgm"]
     metal_cgm_mass = results["metal_cgm_mass"]
     metal_cgm_mass_sol = results["metal_cgm_mass_sol"]
@@ -2231,7 +2250,7 @@ def halo_detailed_energy_and_mass_plots(results, derived_quant, title: str):
     egy_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
-    egy_accrete_t = results["egy_accrete"]
+    egy_cgm_in_t = results["egy_cgm_in"]
     egy_cgm_t = results["egy_cgm"]
     metal_cgm_mass = results["metal_cgm_mass"]
     metal_cgm_mass_sol = results["metal_cgm_mass_sol"]
@@ -2595,7 +2614,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     egy_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
-    egy_accrete_t = results["egy_accrete"]
+    egy_cgm_in_t = results["egy_cgm_in"]
     egy_cgm_t = results["egy_cgm"]
 
     t_dep_eff = mgas_t / dot_m_sfr
@@ -2698,7 +2717,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     ax[1].plot(t, egy_t, label=r"$E_{\rm ISM, winds}$", color=c_mstar, lw=2)
     ax[1].plot(t, egy_cgm_t, label=r"$E_{\rm CGM}$", color=c_mcgm, lw=2)
     ax[1].plot(
-        t, egy_accrete_t, label=r"$E_{\rm CGM, accrete}$", color=c_mcgm_hot, lw=2
+        t, egy_cgm_in_t, label=r"$E_{\rm CGM, accrete}$", color=c_mcgm_hot, lw=2
     )
     ax[1].plot(
         t, egy_radloss_t, label=r"$E_{\rm CGM, cooling}$", color=c_mcgm_cold, lw=2
@@ -2912,7 +2931,7 @@ def accretion_rates(results, derived_quant, title: str):
     egy_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
-    egy_accrete_t = results["egy_accrete"]
+    egy_cgm_in_t = results["egy_cgm_in"]
     egy_cgm_t = results["egy_cgm"]
     metal_cgm_mass = results["metal_cgm_mass"]
     metal_cgm_mass_sol = results["metal_cgm_mass_sol"]
