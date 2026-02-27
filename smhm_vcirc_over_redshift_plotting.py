@@ -125,11 +125,18 @@ for zb in zbins_str:
 zbins_ctr = zbins_ctr[::-1]
 zbins_ctr.append(0.01)  # this is the lowest redshift bin
 
+
 # %% halo properties
 # zobs = [12, 11]  # redshifts to observe at
 # zobs = [8, 7, 3, 2, 1, 0.05]  # redshifts to observe at
 
 zobs = zbins_ctr
+
+
+# # append ot the begining of zobs [20,15]
+# add_these_zs = [20, 15]
+# zobs = add_these_zs + zobs
+
 # make a unique halo array for each redshift
 mhalos = np.geomspace(1e10, 1e13, mass_bins)
 mhalos = np.broadcast_to(mhalos, (len(zobs), mhalos.size)) * u.Msun
@@ -148,6 +155,12 @@ def virial_T(mhalo, Rvir):
     Returns:
         _type_: virial temperture
     """
+    # Ensure mhalo and Rvir have units
+    if not isinstance(mhalo, u.Quantity):
+        mhalo = mhalo * u.Msun
+    if not isinstance(Rvir, u.Quantity):
+        Rvir = Rvir * u.kpc
+
     G = consts.G
     kb = consts.k_B
     mp = consts.m_p
@@ -166,6 +179,10 @@ def virial_radius(z, mhalo, Delc=200):
         ndarray: Virial radius array of shape (len(z), N)
     """
     z = np.asarray(z)
+
+    # Ensure mhalo has units
+    if not isinstance(mhalo, u.Quantity):
+        mhalo = mhalo * u.Msun
 
     # Broadcast critical density to shape (len(z), 1)
     rhoc = LCDM.critical_density(z)[:, np.newaxis]
@@ -186,13 +203,10 @@ def vcirc_from_virial_T(Tvir, mu=0.59):
     return np.sqrt((2 * kb * Tvir) / (mu * mp)).to(u.km / u.s)
 
 
-rvirs = virial_radius(zobs, mhalos)  # virial radius in kpc
-halo_Tvirs = virial_T(mhalos, rvirs)  # virial temperature in K
-vcirc = vcirc_from_virial_T(halo_Tvirs)
 # %% run grid of models for comparison using baseline
 
 # write to file
-file = "./runs/smhm_baseline_redshift_latest_more_info.h5"
+file = "./runs/smhm_baseline_redshift_scan_more_halo_obsfig2.h5"
 
 if not os.path.exists(file):
     redshift_variation, zsims = run_baseline_model_redshift_grid(
@@ -202,19 +216,30 @@ if not os.path.exists(file):
     )
 else:
     print("file already exists")
-    f = h5py.File(file, "r")
-    smhm_normalized_C23 = f["SMHM"]  # smhm is already normalized by baryon fractions
-    mhalo_obs_C23 = f["Mhalo_obs"]
-    print(f.keys())
-    print(f["redshifts"][:])
+    with h5py.File(file, "r") as f:
+        smhm_normalized_C23 = f["SMHM"][
+            :
+        ]  # smhm is already normalized by baryon fractions
+        mhalo_obs_C23 = f["Mhalo_obs"][:]
+        zobs_C23 = f["redshifts"][:]
+        print(f.keys())
+        print(f["redshifts"][:])
 models_label_C23 = "C23 model"
 
 # %%
 # write to file
-file = "./runs/smhm_2phase_redshift_scan_KS_kappa0p1_n1p5_r0p02.h5"
-kappa_sfr = 0.1
-n_sfr = 1.5
-r_disk_sfr = 0.02
+# file = "./runs/smhm_2phase_redshift_scan_KS_kappa0p02_n1p8_r0p018.h5"
+kappa_sfr = 0.02
+n_sfr = 1.8
+r_disk_sfr = 0.018
+
+param_txt = (
+    f"KS1998_16_bins_kappa{str(kappa_sfr).replace('.', 'p')}_"
+    + f"n{str(n_sfr).replace('.', 'p')}_"
+    + f"r{str(r_disk_sfr).replace('.', 'p')}"
+)
+file = "./runs/smhm_2phase_redshift_scan_" f"{param_txt}.h5"
+
 if not os.path.exists(file):
     print("running 2-phase model grid...", file)
     redshift_variation, zsims = run_2phase_model_redshift_grid(
@@ -227,13 +252,23 @@ if not os.path.exists(file):
     )
 else:
     print("file already exists")
-    f = h5py.File(file, "r")
-    smhm_normalized = f["SMHM"]  # smhm is already normalized by baryon fractions
-    mhalo_obs = f["Mhalo_obs"]
-    print(f.keys())
-    print(f["redshifts"][:])
+    with h5py.File(file, "r") as f:
+        smhm_normalized = f["SMHM"][:]  # smhm is already normalized by baryon fractions
+        mhalo_obs = f["Mhalo_obs"][:]
+        zobs = f["redshifts"][:]
+        print(f.keys())
+        print(f["redshifts"][:])
 models_label = ""
 
+# Calculate for C23 baseline model
+rvirs_C23 = virial_radius(zobs_C23, mhalo_obs_C23)  # virial radius in kpc
+halo_Tvirs_C23 = virial_T(mhalo_obs_C23, rvirs_C23)  # virial temperature in K
+vcirc_C23 = vcirc_from_virial_T(halo_Tvirs_C23)
+
+# Calculate for 2-phase model
+rvirs = virial_radius(zobs, mhalos)  # virial radius in kpc
+halo_Tvirs = virial_T(mhalos, rvirs)  # virial temperature in K
+vcirc = vcirc_from_virial_T(halo_Tvirs)
 
 # %%
 
@@ -261,16 +296,49 @@ ax[2].plot(
 )
 
 for i, zb in enumerate(zbins_str[::-1]):
+    
+    ax[1].plot(
+        halo_Tvirs_C23[i],
+        smhm_normalized_C23[i],
+        color=cmap_colors[::-1][i],
+        lw=2,
+        label=f"${zbins_ctr[i]}$",
+    )
+    # Scatter for halo with Tvir < 1e6
+    mask_scatter_C23 = halo_Tvirs_C23[i].value < 1e6
+    ax[1].scatter(
+        halo_Tvirs_C23[i][mask_scatter_C23],
+        smhm_normalized_C23[i][mask_scatter_C23],
+        color=cmap_colors[::-1][i],
+        s=25,
+        marker="o",
+        edgecolor="k",
+        linewidth=0.5,
+        zorder=5,
+    )
+    # Scatter for halo with Tvir >= 1e6 (no edge color)
+    # ax[1].scatter(
+    #     halo_Tvirs_C23[i][~mask_scatter_C23],
+    #     smhm_normalized_C23[i][~mask_scatter_C23],
+    #     color=cmap_colors[::-1][i],
+    #     s=25,
+    #     marker="o",
+    #     zorder=5,
+    # )
+    # now plot for the latest model
     ax[0].plot(
         halo_Tvirs[i],
-        smhm_normalized_C23[i],
+        smhm_normalized[i],
         color=cmap_colors[::-1][i],
         lw=2,
         label=f"${zbins_ctr[i]}$",
     )
+    
+    # Scatter for halo with Tvir < 1e6
+    mask_scatter = halo_Tvirs[i].value < 1e6
     ax[0].scatter(
-        halo_Tvirs[i],
-        smhm_normalized_C23[i],
+        halo_Tvirs[i][mask_scatter],
+        smhm_normalized[i][mask_scatter],
         color=cmap_colors[::-1][i],
         s=25,
         marker="o",
@@ -278,37 +346,19 @@ for i, zb in enumerate(zbins_str[::-1]):
         linewidth=0.5,
         zorder=5,
     )
-    # now plot for the latest model
-    ax[1].plot(
-        halo_Tvirs[i],
-        smhm_normalized[i],
-        color=cmap_colors[::-1][i],
-        lw=2,
-        label=f"${zbins_ctr[i]}$",
-    )
-    ax[1].scatter(
-        halo_Tvirs[i],
-        smhm_normalized[i],
-        color=cmap_colors[::-1][i],
-        s=25,
-        marker="o",
-        edgecolor="k",
-        linewidth=0.5,
-        zorder=5,
-    )
+    # Scatter for halo with Tvir >= 1e6 (no edge color)
+    # ax[0].scatter(
+    #     halo_Tvirs[i][~mask_scatter],
+    #     smhm_normalized[i][~mask_scatter],
+    #     color=cmap_colors[::-1][i],
+    #     s=25,
+    #     marker="o",
+    #     zorder=5,
+    # )
 
     smhm_shuntov = np.array(Mstar[zb]) / (np.array(Mhalo[zb]) * (Ob0 / Omegam0))
     smhm_shuntov_low = np.array(Mstar_low[zb]) / (np.array(Mhalo[zb]) * (Ob0 / Omegam0))
     smhm_shuntov_up = np.array(Mstar_up[zb]) / (np.array(Mhalo[zb]) * (Ob0 / Omegam0))
-    ax[2].fill_between(
-        Mhalo[zb],
-        smhm_shuntov_low,
-        smhm_shuntov_up,
-        lw=0,
-        alpha=0.3,
-        color=cmap_colors[::-1][i],
-        label=f"${zb}$",
-    )
     ax[3].fill_between(
         Mhalo[zb],
         smhm_shuntov_low,
@@ -318,18 +368,29 @@ for i, zb in enumerate(zbins_str[::-1]):
         color=cmap_colors[::-1][i],
         label=f"${zb}$",
     )
-    # Determine which halos have Tvir > 1e6 K
-    mask = halo_Tvirs[i].value < 1e6
+    ax[2].fill_between(
+        Mhalo[zb],
+        smhm_shuntov_low,
+        smhm_shuntov_up,
+        lw=0,
+        alpha=0.3,
+        color=cmap_colors[::-1][i],
+        label=f"${zb}$",
+    )
 
-    ax[2].plot(
-        mhalo_obs_C23[i][mask],
-        smhm_normalized_C23[i][mask],
+    # Separate masks for C23 and latest model
+    mask_C23 = halo_Tvirs_C23[i].value < 1e6
+    mask_latest = halo_Tvirs[i].value < 1e6
+
+    ax[3].plot(
+        mhalo_obs_C23[i][mask_C23],
+        smhm_normalized_C23[i][mask_C23],
         color=cmap_colors[::-1][i],
         lw=2,
     )
-    ax[2].plot(
-        mhalo_obs_C23[i][~mask],
-        smhm_normalized_C23[i][~mask],
+    ax[3].plot(
+        mhalo_obs_C23[i][~mask_C23],
+        smhm_normalized_C23[i][~mask_C23],
         color=cmap_colors[::-1][i],
         lw=2,
         alpha=0.8,
@@ -337,96 +398,101 @@ for i, zb in enumerate(zbins_str[::-1]):
     )
 
     # make a dotted line, straight between mask and ~mask to connect
-    ax[2].plot(
-        [mhalo_obs_C23[i][mask][-1], mhalo_obs_C23[i][~mask][0]],
-        [smhm_normalized_C23[i][mask][-1], smhm_normalized_C23[i][~mask][0]],
+    ax[3].plot(
+        [mhalo_obs_C23[i][mask_C23][-1], mhalo_obs_C23[i][~mask_C23][0]],
+        [smhm_normalized_C23[i][mask_C23][-1], smhm_normalized_C23[i][~mask_C23][0]],
         color=cmap_colors[::-1][i],
         lw=2,
         ls=":",
     )
 
     # now for the latest model
-    ax[3].plot(
-        mhalo_obs[i][mask], smhm_normalized[i][mask], color=cmap_colors[::-1][i], lw=2
+    ax[2].plot(
+        mhalo_obs[i][mask_latest],
+        smhm_normalized[i][mask_latest],
+        color=cmap_colors[::-1][i],
+        lw=2,
     )
-    ax[3].plot(
-        mhalo_obs[i][~mask],
-        smhm_normalized[i][~mask],
+    ax[2].plot(
+        mhalo_obs[i][~mask_latest],
+        smhm_normalized[i][~mask_latest],
         color=cmap_colors[::-1][i],
         lw=2,
         alpha=0.8,
         ls=":",
     )
     # make a dotted line, straight between mask and ~mask to connect
-    ax[3].plot(
-        [mhalo_obs[i][mask][-1], mhalo_obs[i][~mask][0]],
-        [smhm_normalized[i][mask][-1], smhm_normalized[i][~mask][0]],
+    ax[2].plot(
+        [mhalo_obs[i][mask_latest][-1], mhalo_obs[i][~mask_latest][0]],
+        [smhm_normalized[i][mask_latest][-1], smhm_normalized[i][~mask_latest][0]],
         color=cmap_colors[::-1][i],
         lw=2,
         ls=":",
     )
 
 
-ax[2].set(
+ax[3].set(
     xlabel=r"$M_{\rm halo} \: {\rm [M_\odot]}$",
-    ylabel=r"$M_{\star}$/ $M_{\rm halo} (\Omega_{\rm b}/\Omega_{\rm m})$",
+   
     yscale="log",
     xscale="log",
     xlim=(1e10, 9e12),
-    ylim=(3e-3, 0.8),
-)
-ax[0].set(
-    xlabel=r"$T_{\rm vir} \: {\rm [K]}$",
-    ylabel=r"$M_{\star}$/ $M_{\rm halo} (\Omega_{\rm b}/\Omega_{\rm m})$",
-    yscale="log",
-    xscale="log",
-    xlim=(3e4, 5e7),
     ylim=(3e-3, 0.8),
 )
 ax[1].set(
     xlabel=r"$T_{\rm vir} \: {\rm [K]}$",
+    
     yscale="log",
     xscale="log",
     xlim=(3e4, 5e7),
+    ylim=(3e-3, 0.8),
 )
-ax[3].set(
+ax[0].set(
+    xlabel=r"$T_{\rm vir} \: {\rm [K]}$",
+    yscale="log",
+    xscale="log",
+    xlim=(3e4, 5e7),
+     ylabel=r"$M_{\star}$/ $M_{\rm halo} (\Omega_{\rm b}/\Omega_{\rm m})$",
+)
+ax[2].set(
     xlabel=r"$M_{\rm halo} \: {\rm [M_\odot]}$",
     yscale="log",
     xscale="log",
     xlim=(1e10, 9e12),
+    ylabel=r"$M_{\star}$/ $M_{\rm halo} (\Omega_{\rm b}/\Omega_{\rm m})$",
 )
 
 # Add a twin x-axis to ax[0] showing circular velocity corresponding to T_vir
 
 # Get current x-ticks for T_vir axis
-tvir_ticks = ax[0].get_xticks()
+tvir_ticks = ax[1].get_xticks()
 # Remove ticks outside the plotting range
 tvir_ticks = tvir_ticks[
-    (tvir_ticks >= ax[0].get_xlim()[0]) & (tvir_ticks <= ax[0].get_xlim()[1])
+    (tvir_ticks >= ax[1].get_xlim()[0]) & (tvir_ticks <= ax[1].get_xlim()[1])
 ]
 
 # Convert T_vir ticks to circular velocity
 vcirc_ticks = vcirc_from_virial_T(tvir_ticks * u.K).value
 
 # Create twin axis
-ax0_vcirc = ax[0].twiny()
-ax0_vcirc.set_xscale("log")
-ax0_vcirc.set_xlim(ax[0].get_xlim())
-ax0_vcirc.set_xticks(tvir_ticks)
-ax0_vcirc.set_xticklabels(["{:.0f}".format(v) for v in vcirc_ticks])
-ax0_vcirc.set_xlabel(r"$v_{\rm circ} \:  {\rm [km/s]}$ ", labelpad=10)
-# do the next column too
 ax1_vcirc = ax[1].twiny()
 ax1_vcirc.set_xscale("log")
 ax1_vcirc.set_xlim(ax[1].get_xlim())
 ax1_vcirc.set_xticks(tvir_ticks)
 ax1_vcirc.set_xticklabels(["{:.0f}".format(v) for v in vcirc_ticks])
 ax1_vcirc.set_xlabel(r"$v_{\rm circ} \:  {\rm [km/s]}$ ", labelpad=10)
+# do the next column too
+ax0_vcirc = ax[0].twiny()
+ax0_vcirc.set_xscale("log")
+ax0_vcirc.set_xlim(ax[0].get_xlim())
+ax0_vcirc.set_xticks(tvir_ticks)
+ax0_vcirc.set_xticklabels(["{:.0f}".format(v) for v in vcirc_ticks])
+ax0_vcirc.set_xlabel(r"$v_{\rm circ} \:  {\rm [km/s]}$ ", labelpad=10)
 
 # ax0_vcirc.minorticks_off()
 
 # add z = 0
-ax[2].fill_between(
+ax[3].fill_between(
     10**loghm,
     smhm_behroozi * smhm_err_low,
     smhm_behroozi * smhm_err_up,
@@ -434,7 +500,7 @@ ax[2].fill_between(
     alpha=0.3,
     zorder=0,
 )
-ax[3].fill_between(
+ax[2].fill_between(
     10**loghm,
     smhm_behroozi * smhm_err_low,
     smhm_behroozi * smhm_err_up,
@@ -444,25 +510,59 @@ ax[3].fill_between(
 )
 ax[2].text(
     0.05,
-    0.05,
-    "Behroozi et. al. 2019",
+    0.01,
+    r"$z=0$ (Behroozi et al. 2019)",
     transform=ax[2].transAxes,
     fontsize=8,
-    rotation=40,
+    rotation=32,
     ha="left",
 )
 
+ax[1].plot(
+    halo_Tvirs_C23[-1],
+    smhm_normalized_C23[-1],
+    color="grey",
+    lw=2,
+    label="0.0",
+    alpha=0.8,
+)
+# Scatter for halo with Tvir < 1e6
+mask_z0_C23 = halo_Tvirs_C23[-1].value < 1e6
+ax[1].scatter(
+    halo_Tvirs_C23[-1][mask_z0_C23],
+    smhm_normalized_C23[-1][mask_z0_C23],
+    color="grey",
+    s=25,
+    marker="o",
+    edgecolor="k",
+    linewidth=0.5,
+    zorder=5,
+    alpha=0.8,
+)
+# Scatter for halo with Tvir >= 1e6 (no edge color)
+# ax[1].scatter(
+#     halo_Tvirs_C23[-1][~mask_z0_C23],
+#     smhm_normalized_C23[-1][~mask_z0_C23],
+#     color="grey",
+#     s=25,
+#     marker="o",
+#     zorder=5,
+#     alpha=0.8,
+# )
 ax[0].plot(
     halo_Tvirs[-1],
-    smhm_normalized_C23[-1],
+    smhm_normalized[-1],
     color="grey",
     lw=2,
     label="0.0",
     alpha=0.8,
 )
+
+# Scatter for halo with Tvir < 1e6
+mask_z0 = halo_Tvirs[-1].value < 1e6
 ax[0].scatter(
-    halo_Tvirs[-1],
-    smhm_normalized_C23[-1],
+    halo_Tvirs[-1][mask_z0],
+    smhm_normalized[-1][mask_z0],
     color="grey",
     s=25,
     marker="o",
@@ -471,69 +571,45 @@ ax[0].scatter(
     zorder=5,
     alpha=0.8,
 )
-ax[1].plot(
-    halo_Tvirs[-1],
-    smhm_normalized[-1],
-    color="grey",
-    lw=2,
-    label="0.0",
-    alpha=0.8,
-)
-ax[1].scatter(
-    halo_Tvirs[-1],
-    smhm_normalized[-1],
-    color="grey",
-    s=25,
-    marker="o",
-    edgecolor="k",
-    linewidth=0.5,
-    zorder=5,
-    alpha=0.8,
-)
-
-ax[0].text(
-    0.05,
-    0.95,
-    models_label_C23,
-    transform=ax[0].transAxes,
-    ha="left",
-   
-    va="top",
-)
-
+# Scatter for halo with Tvir >= 1e6 (no edge color)
+# ax[0].scatter(
+#     halo_Tvirs[-1][~mask_z0],
+#     smhm_normalized[-1][~mask_z0],
+#     color="grey",
+#     s=25,
+#     marker="o",
+#     zorder=5,
+#     alpha=0.8,
+# )
 
 ax[1].text(
     0.05,
     0.95,
-    r"this work"
-    "\n"
-    r" $\kappa_s={}$"
-    "\n"
-    r" $n={}$"
-    "\n"
-    r" $r_{{\rm disk}}={}$".format(kappa_sfr, n_sfr, r_disk_sfr),
+    models_label_C23,
     transform=ax[1].transAxes,
     ha="left",
-
     va="top",
+    fontsize=10,
 )
+
 
 # make the z=0 line with mask
 # Create mask for Tvir < 1e6
 mask = halo_Tvirs[-1].value < 1e6
-ax[2].plot(
-    mhalo_obs_C23[-1][mask], smhm_normalized_C23[-1][mask], color="grey", lw=2, alpha=1
+mask_C23 = halo_Tvirs_C23[-1].value < 1e6
+ax[3].plot(
+    mhalo_obs_C23[-1][mask_C23], smhm_normalized_C23[-1][mask_C23], color="grey", lw=2, alpha=1
 )
-ax[2].plot(
-    mhalo_obs_C23[-1][~mask],
-    smhm_normalized_C23[-1][~mask],
+ax[3].plot(
+    mhalo_obs_C23[-1][~mask_C23],
+    smhm_normalized_C23[-1][~mask_C23],
     color="grey",
     lw=2,
     alpha=0.8,
     ls=":",
 )
-ax[3].plot(mhalo_obs[-1][mask], smhm_normalized[-1][mask], color="grey", lw=2, alpha=1)
-ax[3].plot(
+ax[2].plot(mhalo_obs[-1][mask], smhm_normalized[-1][mask], color="grey", lw=2, alpha=1)
+ax[2].plot(
     mhalo_obs[-1][~mask],
     smhm_normalized[-1][~mask],
     color="grey",
@@ -543,9 +619,9 @@ ax[3].plot(
 )
 
 # make a dotted line, straight between mask and ~mask to connect
-ax[2].plot(
-    [mhalo_obs_C23[-1][mask][-1], mhalo_obs_C23[-1][~mask][0]],
-    [smhm_normalized_C23[-1][mask][-1], smhm_normalized_C23[-1][~mask][0]],
+ax[3].plot(
+    [mhalo_obs_C23[-1][mask_C23][-1], mhalo_obs_C23[-1][~mask_C23][0]],
+    [smhm_normalized_C23[-1][mask_C23][-1], smhm_normalized_C23[-1][~mask_C23][0]],
     color="grey",
     lw=2,
     ls=":",
@@ -564,13 +640,38 @@ ax[2].legend(
 ax[0].legend(
     frameon=False,
     fontsize=8,
-    ncol=2,
-    title=r"${\rm redshift} \: z$",
+    ncol=3,
+    title=r"$z$",
     title_fontsize=10,
     loc="lower right",
 )
+
+
+# ax[0].text(
+#     0.05,
+#     0.95,
+#     r"this work"
+#     "\n"
+#     r" $\kappa_s={}$"
+#     "\n"
+#     r" $n={}$"
+#     "\n"
+#     r" $r_{{\rm disk}}={}$".format(kappa_sfr, n_sfr, r_disk_sfr),
+#     transform=ax[0].transAxes,
+#     ha="left",
+#     va="top",
+# )
+ax[0].text(
+    0.05,
+    0.95,
+    r"this work",
+    transform=ax[0].transAxes,
+    ha="left",
+    va="top",
+    fontsize=10
+)
 plt.savefig(
-    "./figures/comparison_SMHM_KS_kap0p01_rd_0p02_n_1p5.png",
+    "./figures/comparison_SMHM_KS_kap0p02_rd_0p018_n_1p8.png",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,

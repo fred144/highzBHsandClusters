@@ -441,7 +441,7 @@ def halo_mass_growth_dekel(t, mass):
     """
     mhalo = mass * u.solMass
     #    z = np.sqrt((28/t) - 1) - 1 # cosmological redshift
-    if t >  13.466983807377275:  # 13.4 is the age of the universe in Gyr
+    if t > 13.466983807377275:  # 13.4 is the age of the universe in Gyr
         t = 13.46
     z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
     mhalo_dot = halo_infall_dekel(z, mhalo)
@@ -813,11 +813,11 @@ class CGMRegulator:
         ...     disk_scale_length=0.02,
         ... )
         >>> model.run_halo()
-        >>> 
+        >>>
         >>> # Get the mass and energy evolution
         >>> results = model.get_results()
         >>> print(results.keys())
-        >>> 
+        >>>
         >>> # Get derived quantities such as timescales or cooling rates
         >>> derived = model.get_derived_quantities()
         >>> print(derived.keys())
@@ -848,9 +848,9 @@ class CGMRegulator:
         alpha_m=0.1,
         alpha_e=0.1,
         custom_cooling_params=None,
-        KS_parametrization = "KS1998",
+        KS_parametrization="KS1998",
         cooling_tables="SutherlandDopita93",
-        TEST_tej_Tvir_definition= False,
+        TEST_tej_Tvir_definition=False,
         # ep_bh_radeff=0.1,                 # BH things not currently being used
         # ep_bh_feedback_eff=0.02,
         # bondi_boost=100,
@@ -921,8 +921,10 @@ class CGMRegulator:
         # self.mbh_seed = m_bh_seed
         
         # cooling table
-        self.cooling_fn = CoolingFunctionInterpolator("./tables/newcool_viraj.dat")
-        # self.cooling_fn = WiersamaCooling("./tables/Lambda_tab_redshifts.npz")
+        if self.cooling_tables == "SutherlandDopita93":
+            self.cooling_fn = CoolingFunctionInterpolator("./tables/newcool_viraj.dat")
+        elif self.cooling_tables == "Wiersama+09":
+            self.cooling_fn = WiersamaCooling()
 
         self.zinit = cosmology.z_at_value(LCDM.age, time_interval[0] * u.Gyr)
         self.zfinal = cosmology.z_at_value(LCDM.age, time_interval[1] * u.Gyr)
@@ -968,11 +970,11 @@ class CGMRegulator:
         cm_per_km = 1e5
         kb_erg_per_K = consts.k_B.to(u.erg / u.K).value
         mu_g = (0.6 * consts.m_p).to(u.g).value
-        mass_floor_msun = 1e-12  # Msun
-        vel_floor_kms =1e-12  # km/s
-        time_floor_gyr = 1e-12  # Gyr
-        erg_per_Gyr_floor = 1e-12 
-        
+        mass_floor_msun = 1e-21  # Msun
+        vel_floor_kms = 1e-21  # km/s
+        time_floor_gyr = 1e-21  # Gyr
+        erg_per_Gyr_floor = 1e-21
+
         # get current redshift
         z = cosmology.z_at_value(LCDM.age, t * u.Gyr)
 
@@ -983,13 +985,15 @@ class CGMRegulator:
         m_cgm_hot = float(mass[3])  # Msun
         m_cgm_cold = float(mass[4])  # Msun
         m_cgm = m_cgm_hot + m_cgm_cold  # Msun
-        m_metals = float(mass[5])  # Msun (metal mass in Msun)
-        m_halo = float(mass[6])  # Msun
-        e_ism_wind = float(mass[7])  # erg
-        e_cgm_cool = float(mass[8])  # erg
-        e_cgm_out = float(mass[9])  # erg
-        e_cgm_in = float(mass[10])  # erg
-        e_cgm = float(mass[11])  # erg
+        m_metals_cgm = float(mass[5])  # Msun (metal mass in Msun)
+        m_metals_ism = float(mass[6])  # Msun (metal mass in Msun)
+        m_halo = float(mass[7])  # Msun
+        e_ism_wind = float(mass[8])  # erg
+        e_cgm_cool = float(mass[9])  # erg
+        e_cgm_out = float(mass[10])  # erg
+        e_cgm_in = float(mass[11])  # erg
+        e_cgm = float(mass[12])  # erg
+        
 
         # m_bh = mass[12] * u.solMass        # Total black hole mass
 
@@ -1044,10 +1048,26 @@ class CGMRegulator:
 
         # CGM metallicity (in solar units)
         m_cgm_safe = max(m_cgm, mass_floor_msun)
-        cgm_metallicity = m_metals / m_cgm_safe  # metal mass fraction
+        cgm_metallicity = m_metals_cgm / m_cgm_safe  # metal mass fraction
         cgm_metallicity_sol = cgm_metallicity / self.Z_sol
 
+        # ISM metallicity
+        m_ism_safe = max(m_ism, mass_floor_msun)
+        ism_metallicity = m_metals_ism / m_ism_safe
+        ism_metallicity_sol = ism_metallicity / self.Z_sol
+
+        ### density normalization rho0 (we compute unitless numeric in Msun/kpc^3)
+        rho0_msun_per_kpc3 = density0(
+            mCGM=m_cgm_hot, r0=r1_kpc, Rvir=halo_rvir_kpc, alpha=self.alpha
+        )
+        # convert rho0 to g/cm^3 for cgs calculations
+        rho0_g_cm3 = rho0_msun_per_kpc3 * Msun_g / (kpc_to_cm**3)
+
+        # central number density (1/cm^3) used for caluctiona, for hot
+        nh_0 = rho0_g_cm3 / mu_g if mu_g > 0 else 0.0
+
         ### cooling lambda (unit: erg cm^3 s^-1) numeric
+        lambda_is_a_cooling_term = True
         if self.custom_cooling_params is not None:
             cooling_lambda_val = float(
                 self.cooling_fn.custom_cooling_function(
@@ -1057,20 +1077,24 @@ class CGMRegulator:
                     T_slope=self.custom_cooling_params[1],
                 )
             )
+
+            if cooling_lambda_val <= 0:
+                lambda_is_a_cooling_term = False
+
         else:
-            cooling_lambda_val = float(
-                self.cooling_fn.cooling_function(cgm_temp_K, cgm_metallicity_sol)
-            )
+            if self.cooling_tables == "SutherlandDopita93":
+                cooling_lambda_val = float(
+                    self.cooling_fn.cooling_function(cgm_temp_K, cgm_metallicity_sol)
+                )
+            elif self.cooling_tables == "Wiersama+09":
+                print(nh_0, cgm_temp_K, cgm_metallicity_sol, z)
+                cooling_lambda_val = self.cooling_fn(
+                    nh_0, cgm_temp_K, cgm_metallicity_sol, z
+                )
+                print("cooling_lambda_val", cooling_lambda_val)
 
-        ### density normalization rho0 (we compute unitless numeric in Msun/kpc^3)
-        rho0_msun_per_kpc3 = density0(
-            mCGM=m_cgm_hot, r0=r1_kpc, Rvir=halo_rvir_kpc, alpha=self.alpha
-        )
-        # convert rho0 to g/cm^3 for cgs calculations
-        rho0_g_cm3 = rho0_msun_per_kpc3 * Msun_g / (kpc_to_cm**3)
-
-        # central number density (1/cm^3)
-        nh_0 = rho0_g_cm3 / mu_g if mu_g > 0 else 0.0
+            if cooling_lambda_val <= 0:
+                lambda_is_a_cooling_term = False
 
         ### compute radiative energy loss integrated numerically in CGS
         # energy_loss (cgs): erg/s
@@ -1092,6 +1116,7 @@ class CGMRegulator:
                 * cooling_lambda_val
                 * term_geom
             )
+            # print("rad_loss_erg_per_s", rad_loss_erg_per_s)
         else:
             rad_loss_erg_per_s = 0.0
         # convert to erg/Gyr for consistency with rest of code (time units are Gyr)
@@ -1099,16 +1124,18 @@ class CGMRegulator:
 
         ### ejection timescale and limits
         if self.TEST_tej_Tvir_definition is True:
-            ## here we use virial temperature to define a virial energy to define a 
-            c_sound_cm_s_Tvir = np.sqrt(kb_erg_per_K * halo_vir_temp_K / mu_g) 
+            ## here we use virial temperature to define a virial energy to define a
+            c_sound_cm_s_Tvir = np.sqrt(kb_erg_per_K * halo_vir_temp_K / mu_g)
             c_sound_cm_s = c_sound_cm_s_Tvir
-        else:    
+        else:
             # compute sound speed from e_per_mass (erg/g) -> cm/s
             c_sound_cm_s = np.sqrt(max(e_per_mass_erg_per_g, 0.0))
             # c_sound_kms = c_sound_cm_s / cm_per_km
-            
+
         # t_ejection = rvir / c_sound (in seconds -> Gyr)
-        t_ejection_sec = (halo_rvir_kpc * kpc_to_cm) / max(c_sound_cm_s, vel_floor_kms * cm_per_km)
+        t_ejection_sec = (halo_rvir_kpc * kpc_to_cm) / max(
+            c_sound_cm_s, vel_floor_kms * cm_per_km
+        )
         t_ejection_Gyr = t_ejection_sec / sec_per_Gyr
 
         # apply limits: between self.t_eject_lim_norm * t_dynamical and t_dynamical
@@ -1122,7 +1149,9 @@ class CGMRegulator:
         # thermal_energy_virial = kb * Tvir * (mass_hot_g) / mu_g (erg)
         thermal_energy_virial = kb_erg_per_K * halo_vir_temp_K * mass_hot_g / mu_g
         e_excess_erg = max(e_cgm - thermal_energy_virial, 0.0)
-        dot_e_cgm_out_erg_per_Gyr = e_excess_erg / max(t_ejection_Gyr, erg_per_Gyr_floor)
+        dot_e_cgm_out_erg_per_Gyr = e_excess_erg / max(
+            t_ejection_Gyr, erg_per_Gyr_floor
+        )
 
         ### cooling time and energy cooling rate (Gyr units)
         # cgm_specific_e: erg per g (use max between e_per_mass and kb*T/mu)
@@ -1133,52 +1162,76 @@ class CGMRegulator:
         # total energy associated with that specific energy for the hot mass (erg)
         total_energy_erg = cgm_specific_e_erg_per_g * mass_hot_g
         # tcool (Gyr) = total_energy / dot_e_cgm_hot_loss (erg/Gyr)
-        tcool_Gyr = total_energy_erg / dot_e_cgm_hot_loss_erg_per_Gyr
+        tcool_Gyr = (
+            total_energy_erg / dot_e_cgm_hot_loss_erg_per_Gyr
+        )  # needsto be positive
 
         # prevent non-physical or negative
         tcool_Gyr = max(tcool_Gyr, time_floor_gyr)
 
         # dot_e_cgm_cooling (erg/Gyr)
-        dot_e_cgm_cooling_erg_per_Gyr = e_cgm / tcool_Gyr
+        dot_e_cgm_cooling_erg_per_Gyr = (
+            e_cgm / tcool_Gyr
+        )  # derivative of energy due to cooling
 
         ### mass exchange rates (Msun/Gyr)
-        dot_m_cgm_hot_cooling = m_cgm_hot / tcool_Gyr
+        if not lambda_is_a_cooling_term:
+            # if the cooling lambda is not actually cooling (e.g. due to custom params), set cooling rates to 0
+            dot_m_cgm_hot_cooling = 0.0
+        else:
+            dot_m_cgm_hot_cooling = m_cgm_hot / tcool_Gyr
+
         dot_m_cgm_cold_falling = m_cgm_cold / max(t_dynamical_Gyr, time_floor_gyr)
 
         # star formation (KS-like) -- do unitless arithmetic (Msun, kpc)
         r_disk_kpc = self.disk_scale * halo_rvir_kpc
         sigma0 = m_ism / (2.0 * np.pi * (r_disk_kpc**2))  # Msun / kpc^2
-        
+
         if self.KS_parametrization == "KS1998":
             ### using original Kennicut law https://arxiv.org/pdf/astro-ph/9712213
-            Asfr = 2.5e-4   # msun/yr/kpc^2    
+            Asfr = 2.5e-4  # msun/yr/kpc^2
             Sigma1 = 1 * u.Msun / u.pc**2
             Sigma1_kpc2 = Sigma1.to(u.Msun / u.kpc**2)
-            dot_m_star = self.ks_kappa_s * Asfr * (sigma0/ Sigma1_kpc2.value) ** self.ks_n * (2 * np.pi * r_disk_kpc**2  / self.ks_n**2) # Msun / year
-            dot_m_star *=   1e9  # convert to msun/Gyr
+            dot_m_star = (
+                self.ks_kappa_s
+                * Asfr
+                * (sigma0 / Sigma1_kpc2.value) ** self.ks_n
+                * (2 * np.pi * r_disk_kpc**2 / self.ks_n**2)
+            )  # Msun / year
+            dot_m_star *= 1e9  # convert to msun/Gyr
         elif self.KS_parametrization == "Vallini2024":
             # vallini
-            Asfr = 1e-12 * self.ks_kappa_s * 1e9  # msun / Gyr / kpc^2 
+            # Asfr = 1e-12 * self.ks_kappa_s * 1e9  # msun / Gyr / kpc^2
+            # dot_m_star = (
+            #     Asfr * (sigma0**self.ks_n) * (2.0 * np.pi * r_disk_kpc**2) / (self.ks_n**2)
+            # )  # Msun / Gyr
+            Asfr = 1e-12 * 1e9  # msun / Gyr / kpc^2 (base rate, no kappa_s here)
+            Sigma1_kpc2 = (1 * u.Msun / u.kpc**2).value  # normalization
             dot_m_star = (
-                Asfr * (sigma0**self.ks_n) * (2.0 * np.pi * r_disk_kpc**2) / (self.ks_n**2)
-            )  # Msun / Gyr
-        else: 
-            raise ValueError(f"Invalid KS parametrization: {self.KS_parametrization}. Must be 'KS1998' or 'Vallini2024'")
-            
-            
+                self.ks_kappa_s
+                * Asfr
+                * (sigma0 / Sigma1_kpc2) ** self.ks_n
+                * (2.0 * np.pi * r_disk_kpc**2)
+                / (self.ks_n**2)
+            )  # Now correctly Msun / Gyr
+        else:
+            raise ValueError(
+                f"Invalid KS parametrization: {self.KS_parametrization}. Must be 'KS1998' or 'Vallini2024'"
+            )
+
         #### gregdefinition
         # A1 = 1e-12 # msun/yr/kpc^2
         # Sigma1 = 1 * u.Msun / u.kpc**2
         # Sigma2 = (1 * u.Msun / u.pc**2).to(u.Msun / u.kpc**2)
         # A2 = A1 * (Sigma2 / Sigma1) ** self.ks_n  # msun/
-        # Asfr = 2 * np.pi * self.ks_kappa_s *A2 
-        # dot_m_star = Asfr * (r_disk_kpc**2 / self.ks_n**2) * (sigma0 / Sigma2.value) ** self.ks_n  # Msun / year 
+        # Asfr = 2 * np.pi * self.ks_kappa_s *A2
+        # dot_m_star = Asfr * (r_disk_kpc**2 / self.ks_n**2) * (sigma0 / Sigma2.value) ** self.ks_n  # Msun / year
         # dot_m_star *= 1e9  # convert to Msun / Gyr
         if self.verbose:
             print(
                 f"dot_m_star inputs: Asfr={Asfr:.3e}, sigma0={sigma0:.3e}, ks_n={self.ks_n:.3e}, r_disk={r_disk_kpc:.3e}, m_ism={m_ism:.3e}"
             )
-        
+
         if self.updated_SF_law:
             dot_m_sfr = dot_m_star  # Msun / Gyr
         else:
@@ -1197,12 +1250,17 @@ class CGMRegulator:
         ) * (r_disk_kpc**2 + self.ks_n * self.r_bulge * r_disk_kpc)
         dot_mstar_central = dot_m_bulge  # Msun / Gyr
 
-        # ISM mass rate (two-phase mixing debug handling preserved)
-        dbug_rate = (
+        # ISM mass rate
+        # the two phase behavior is dot_m_cgm_cold_falling
+        # two_phase dbug_norm_for_2_phase_CGM = 0
+        # if 1, makes it behave like the 1 phase CGM
+        falling_into_ism = (
             (1.0 - self.dbug_norm_for_2_phase_CGM) * dot_m_cgm_cold_falling
             + self.dbug_norm_for_2_phase_CGM * dot_m_cgm_hot_cooling
         )
-        dot_m_ism = dbug_rate - dot_m_sfr * (1.0 + float(self.eta_m))
+        dot_m_ism = (
+            falling_into_ism - dot_m_sfr - float(self.eta_m) * dot_m_sfr
+        )  # Msun / Gyr
 
         # halo infall (Msun/Gyr)
         if self.updated_halo_infall:
@@ -1223,7 +1281,7 @@ class CGMRegulator:
             dot_m_cgm_out_g_per_Gyr = (
                 dot_e_cgm_out_erg_per_Gyr / cgm_specific_e_erg_per_g
             )
-            dot_m_cgm_out = dot_m_cgm_out_g_per_Gyr / Msun_g
+            dot_m_cgm_out = dot_m_cgm_out_g_per_Gyr / Msun_g  # convert to Msun/Gyr
         else:
             dot_m_cgm_out = 0.0
 
@@ -1232,7 +1290,8 @@ class CGMRegulator:
             dot_m_cgm_accreted * Msun_g
         )
         e_ejection_to_infall_ratio = self.cgm_infall_prevention_const * (
-            dot_energy_from_infall_erg_per_Gyr / max(dot_e_cgm_out_erg_per_Gyr, erg_per_Gyr_floor)
+            dot_energy_from_infall_erg_per_Gyr
+            / max(dot_e_cgm_out_erg_per_Gyr, erg_per_Gyr_floor)
         )
 
         if self.add_f_prevent_floor:
@@ -1245,7 +1304,9 @@ class CGMRegulator:
         if self.add_f_prevent_constant is not None:
             f_prevent = float(self.add_f_prevent_constant)
 
-        dot_m_cgm_in = f_prevent * dot_m_cgm_accreted # this is attenuated now
+        dot_m_cgm_in = (
+            f_prevent * dot_m_cgm_accreted
+        )  # this is attenuated now after this line
 
         ##################### BH routines
         # c_s = np.sqrt(self.kb * cgm_temp / self.mu).to(u.km / u.s)
@@ -1278,7 +1339,7 @@ class CGMRegulator:
         #         0.15
         #         * f_disk**2.5
         #         * (m_bh.value / 1e8) ** (1 / 6)
-        #         * (m_enclosed/ 1e9)
+        #         * (m_enclosed/ 1e9)   
         #         * (self.r_grav_physical / 0.1) ** (-3 / 2)
         #         * (1 + f_0 / f_gas) ** -1
         #     )
@@ -1314,7 +1375,7 @@ class CGMRegulator:
                 f"At z={z:.2f}, m_halo={m_halo:.3e}, dot_m_halo={dot_m_halo:.3e}, f_prevent={f_prevent:.3f}"
             )
             print(
-                f"m_ism={m_ism:.3e}, m_star={m_star:.3e}, m_bulge={m_bulge:.3e}, m_cgm_hot={m_cgm_hot:.3e}, m_cgm_cold={m_cgm_cold:.3e}, m_metals={m_metals:.3e}"
+                f"m_ism={m_ism:.3e}, m_star={m_star:.3e}, m_bulge={m_bulge:.3e}, m_cgm_hot={m_cgm_hot:.3e}, m_cgm_cold={m_cgm_cold:.3e}, m_metals_cgm={m_metals_cgm:.3e}"
             )
             print(
                 f"e_ism_wind={e_ism_wind:.3e}, e_cgm_cool={e_cgm_cool:.3e}, e_cgm_out={e_cgm_out:.3e}, e_cgm_in={e_cgm_in:.3e}, e_cgm={e_cgm:.3e}"
@@ -1326,7 +1387,7 @@ class CGMRegulator:
                 f"dot_e_cgm_out={dot_e_cgm_out_erg_per_Gyr:.3e}, dot_e_cgm_hot_loss={dot_e_cgm_hot_loss_erg_per_Gyr:.3e}, dot_e_cgm_in={dot_e_cgm_in_erg_per_Gyr:.3e}, dot_e_cgm_cooling={dot_e_cgm_cooling_erg_per_Gyr:.3e}"
             )
 
-        # --- main derivatives (unitless numeric arrays matching original units)
+        # main derivatives (unitless numeric arrays matching original units)
         dot_m_cgm_hot = (
             dot_m_cgm_in + dot_m_ism_wind - dot_m_cgm_hot_cooling - dot_m_cgm_out
         )
@@ -1340,13 +1401,17 @@ class CGMRegulator:
             # + dot_e_bh_thermfeedback
         )
 
-        dot_m_metal = (
+        dot_m_metal_cgm = (
             self.metal_yield * self.eta_z * dot_m_sfr
             + self.Z_IGM * self.Z_sol * dot_m_cgm_in
-            - cgm_metallicity * dot_m_cgm_hot_cooling
+            - cgm_metallicity * dot_m_cgm_cold_falling
             - cgm_metallicity * dot_m_cgm_out
         )
-
+        dot_m_metal_ism = (
+            cgm_metallicity * dot_m_cgm_cold_falling
+            + self.metal_yield * dot_m_sfr
+            - self.metal_yield * self.eta_z * dot_m_sfr
+        )
         # safety guards for low CGM masses
         if (m_cgm_hot < 5e3) and (dot_m_cgm_hot < 0):
             dot_m_cgm_hot *= max((m_cgm_hot - 5e3) / 5e3, 0.0)
@@ -1412,7 +1477,8 @@ class CGMRegulator:
                     float(dot_mstar_central),  # Msun / Gyr
                     float(dot_m_cgm_hot),  # Msun / Gyr
                     float(dot_m_cgm_cold),  # Msun / Gyr
-                    float(dot_m_metal),  # Msun / Gyr
+                    float(dot_m_metal_cgm),  # Msun / Gyr
+                    float(dot_m_metal_ism),  # Msun / Gyr
                     float(dot_m_halo),  # Msun / Gyr
                     float(dot_e_ism_wind_erg_per_Gyr),  # erg / Gyr
                     float(dot_e_cgm_cooling_erg_per_Gyr),  # erg / Gyr
@@ -1452,6 +1518,8 @@ class CGMRegulator:
                     float(cgm_temp_K),
                     float(rho0_msun_per_kpc3),
                     float(dot_m_halo),
+                    float(dot_m_metal_cgm),
+                    float(dot_m_metal_ism),
                     # dot_m_bh.value,
                     # dot_e_bh_thermfeedback.value,
                     # dot_m_bh_bondi.value,
@@ -1463,7 +1531,10 @@ class CGMRegulator:
             )
 
     def run_halo(self):
-        print("self.time_interval", self.time_interval, )
+        print(
+            "self.time_interval",
+            self.time_interval,
+        )
         if self.updated_halo_infall:
             mhalo_t0 = initial_mhalo_fakhouri(self.mhalo_z0, self.time_interval)
         else:
@@ -1496,6 +1567,13 @@ class CGMRegulator:
         e_cgm_in_0 = 1e3 * u.erg
 
         e_bh_feedback_0 = 0.0 * u.erg
+        
+        # initial ISM metal mass
+        initial_ism_metal_zsun = 0.001
+        mass_ism_metals_0 = mass_ism_gas_0 * initial_ism_metal_zsun * self.Z_sol
+        
+        # initial 
+        
         # initial conditions masses and energ
         initial_values = np.array(
             [
@@ -1505,6 +1583,7 @@ class CGMRegulator:
                 mass_cgm_hot_0,
                 mass_cgm_cold_0,
                 mass_cgm_metals_0,
+                mass_ism_metals_0,
                 mhalo_t0,
                 e_ism_wind_0.value,
                 e_cgm_cooling_0.value,
@@ -1516,7 +1595,7 @@ class CGMRegulator:
             ]
         )
         print(
-            "> initial values ISM  = {:.2e} Msol \t Stellar mass = {:.2e} Msol\tBulge stellar mass = {:.2e} Msol\tCGM hot mass = {:.2e} Msol\tCGM cold mass = {:.2e} Msol\tMetal mass = {:.2e} Msol\tCGM metallicity = {:.4f} (Zsun)\tHalo mass = {:.2e} Msol\tISM wind energy = {:.2e} erg\tCGM cooling energy = {:.2e} erg\tCGM out energy = {:.2e} erg\tCGM in energy = {:.2e} erg\tCGM energy = {:.2e} erg".format(
+            "> initial values ISM  = {:.2e} Msol \t Stellar mass = {:.2e} Msol\tBulge stellar mass = {:.2e} Msol\tCGM hot mass = {:.2e} Msol\tCGM cold mass = {:.2e} Msol\tCGM Metal mass = {:.2e} Msol\tCGM metallicity = {:.4f} (Zsun)\tHalo mass = {:.2e} Msol\tISM wind energy = {:.2e} erg\tCGM cooling energy = {:.2e} erg\tCGM out energy = {:.2e} erg\tCGM in energy = {:.2e} erg\tCGM energy = {:.2e} erg\tISM Metal mass = {:.2e} Msol\tISM metallicity = {:.4f} (Zsun)".format(
                 initial_values[0],
                 initial_values[1],
                 initial_values[2],
@@ -1530,6 +1609,8 @@ class CGMRegulator:
                 initial_values[9],
                 initial_values[10],
                 initial_values[11],
+                initial_values[12],
+                (initial_values[12] / mass_ism_gas_0) / self.Z_sol,
             )
         )
 
@@ -1569,17 +1650,21 @@ class CGMRegulator:
         mcgm_hot_t = solution.y[3]
         mcgm_cold_t = solution.y[4]
         mcgm_t = mcgm_hot_t + mcgm_cold_t  # total CGM mass
-        mmetals_t = solution.y[5]
-        mhalo_t = solution.y[6]
+        mmetals_cgm_t = solution.y[5]
+        mmetals_ism_t = solution.y[6]
+        mhalo_t = solution.y[7]
+    
+        egy_t = solution.y[8]  # energy gained from energy-loaded galactic winds
+        egy_radloss_t = solution.y[9]  # energy lost due to cooling
+        egy_eject_t = solution.y[10]  # energy ejected from the CGM
+        egy_cgm_in_t = solution.y[11]  # energy accreted from the IGM
+        egy_cgm_t = solution.y[12]  # total cgm energy
+    
 
-        egy_t = solution.y[7]  # energy gained from energy-loaded galactic winds
-        egy_radloss_t = solution.y[8]  # energy lost due to cooling
-        egy_eject_t = solution.y[9]  # energy ejected from the CGM
-        egy_cgm_in_t = solution.y[10]  # energy accreted from the IGM
-        egy_cgm_t = solution.y[11]  # total cgm energy
-
-        metal_cgm_mass = mmetals_t / mcgm_t  # CGM metallicity ratio
+        metal_cgm_mass = mmetals_cgm_t / mcgm_t  # CGM metallicity ratio
         metal_cgm_mass_sol = metal_cgm_mass / self.Z_sol
+        metal_ism_mass = mmetals_ism_t / mgas_t  # ISM metallicity ratio
+        metal_ism_mass_sol = metal_ism_mass / self.Z_sol
 
         # BH
         # mbh = solution.y[12]
@@ -1614,7 +1699,8 @@ class CGMRegulator:
         self.ode_results["m_cgm"] = mcgm_t
         self.ode_results["m_cgm_hot"] = mcgm_hot_t
         self.ode_results["m_cgm_cold"] = mcgm_cold_t
-        self.ode_results["m_metals"] = mmetals_t
+        self.ode_results["m_metals_cgm"] = mmetals_cgm_t
+        self.ode_results["m_metals_ism"] = mmetals_ism_t
         self.ode_results["m_halo"] = mhalo_t
         self.ode_results["egy_ism_wind"] = egy_t
         self.ode_results["egy_radloss"] = egy_radloss_t
@@ -1623,6 +1709,8 @@ class CGMRegulator:
         self.ode_results["egy_cgm"] = egy_cgm_t
         self.ode_results["metal_cgm_mass"] = metal_cgm_mass
         self.ode_results["metal_cgm_mass_sol"] = metal_cgm_mass_sol
+        self.ode_results["metal_ism_mass"] = metal_ism_mass
+        self.ode_results["metal_ism_mass_sol"] = metal_ism_mass_sol
         # self.ode_results["m_bh"] = mbh
         # self.ode_results["egy_bh"] = e_bh
 
@@ -1651,7 +1739,8 @@ class CGMRegulator:
                 self.ode_results["m_bulge"],
                 self.ode_results["m_cgm_hot"],
                 self.ode_results["m_cgm_cold"],
-                self.ode_results["m_metals"],
+                self.ode_results["m_metals_cgm"],
+                self.ode_results["m_metals_ism"],
                 self.ode_results["m_halo"],
                 self.ode_results["egy_ism_wind"],
                 self.ode_results["egy_radloss"],
@@ -1700,6 +1789,8 @@ class CGMRegulator:
             "cgm_temp": derived_quantities[:, 19],
             "rho0": derived_quantities[:, 20],
             "dot_m_halo": derived_quantities[:, 21],
+            "dot_m_metal_cgm": derived_quantities[:, 22],
+            "dot_m_metal_ism": derived_quantities[:, 23],
             # "dot_m_bh": derived_quantities[:, 18],
             # "dot_e_bh_thermfeedback": derived_quantities[:, 19],
             # "dot_m_bh_bondi": derived_quantities[:, 20],
@@ -1861,7 +1952,7 @@ def halo_timescales(results, derived_quant, title: str):
     mcgm_t = results["m_cgm"]
     mcgm_hot_t = results["m_cgm_hot"]
     mcgm_cold_t = results["m_cgm_cold"]
-    mmetals_t = results["m_metals"]
+    mmetals_t = results["m_metals_cgm"]
     mhalo_t = results["m_halo"]
     egy_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
@@ -2052,7 +2143,7 @@ def halo_normalized_rates(results, derived_quant, title: str):
     mcgm_t = results["m_cgm"]
     mcgm_hot_t = results["m_cgm_hot"]
     mcgm_cold_t = results["m_cgm_cold"]
-    mmetals_t = results["m_metals"]
+    mmetals_t = results["m_metals_cgm"]
     mhalo_t = results["m_halo"]
     egy_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
@@ -2243,7 +2334,7 @@ def halo_detailed_energy_and_mass_plots(results, derived_quant, title: str):
     mcgm_t = results["m_cgm"]
     mcgm_hot_t = results["m_cgm_hot"]
     mcgm_cold_t = results["m_cgm_cold"]
-    mmetals_t = results["m_metals"]
+    mmetals_t = results["m_metals_cgm"]
     mhalo_t = results["m_halo"]
     egy_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
@@ -2714,9 +2805,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     ax[1].plot(t, egy_eject_t, label=r"$E_{\rm CGM, out}$", color=c_mhalo, lw=2)
     ax[1].plot(t, egy_t, label=r"$E_{\rm ISM, winds}$", color=c_mstar, lw=2)
     ax[1].plot(t, egy_cgm_t, label=r"$E_{\rm CGM}$", color=c_mcgm, lw=2)
-    ax[1].plot(
-        t, egy_cgm_in_t, label=r"$E_{\rm CGM, accrete}$", color=c_mcgm_hot, lw=2
-    )
+    ax[1].plot(t, egy_cgm_in_t, label=r"$E_{\rm CGM, accrete}$", color=c_mcgm_hot, lw=2)
     ax[1].plot(
         t, egy_radloss_t, label=r"$E_{\rm CGM, cooling}$", color=c_mcgm_cold, lw=2
     )
@@ -2924,7 +3013,7 @@ def accretion_rates(results, derived_quant, title: str):
     mcgm_t = results["m_cgm"]
     mcgm_hot_t = results["m_cgm_hot"]
     mcgm_cold_t = results["m_cgm_cold"]
-    mmetals_t = results["m_metals"]
+    mmetals_t = results["m_metals_cgm"]
     mhalo_t = results["m_halo"]
     egy_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]

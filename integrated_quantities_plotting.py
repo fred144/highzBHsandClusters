@@ -1,7 +1,4 @@
 #XXX: maybe baseline model was ran with updated quantitities was ran to get the apper figure back?
-
-
-
 # %%
 import os
 from pyexpat import model
@@ -332,7 +329,7 @@ smhm_err_low = 10 ** SMHMerr[0, :]
 # )
 # ax[2].plot(
 #     results_latest["t"],
-#     results_latest["egy_accrete"],
+#     results_latest["egy_cgm_in"],
 #     color=color_e_cgm_in,
 #     lw=2,
 #     label=r"$E_{\rm CGM, acc}$",
@@ -443,15 +440,15 @@ else:
     print(f.keys())
 
 # latest model grid
-file_latest_model = "./runs/smhm_2phase_redshift_scan_KS1998_kappa0p046415888336127774_n1p8_r0p02.h5"
+file_latest_model = "./runs/smhm_2phase_redshift_scan_KS1998_kappa0p02_n1p8_r0p018.h5"
 if not os.path.exists(file_latest_model):
     redshift_variation, zsims = run_2phase_model_redshift_grid(
         observe_at=[0.01],  # redshift we want to observe
         mhalos=[np.geomspace(1e10, 1e13, 6) * u.Msun],
         write_to_file=file_latest_model,
-        KS_kappa_s=0.1,
-        KS_n=1.4,
-        disk_scale_length=0.02,
+        KS_kappa_s=0.02,
+        KS_n=1.8,
+        disk_scale_length=0.018,
         KS_parametrization="KS1998",
     )
 else:
@@ -468,13 +465,12 @@ t_span = (0.1, 13)  # gyrs
 latest_model = CGMRegulator(
     mhalo_z0,
     t_span,
-    add_f_prevent_floor=1e-6,# virtually no floor
-    KS_kappa_s = 0.0464,
+    add_f_prevent_floor=1e-8,# virtually no floor
+    KS_kappa_s = 0.02, # fiducial params
     KS_n = 1.8,
-    disk_scale_length=0.02,
+    disk_scale_length=0.018,
     KS_parametrization="KS1998",
-    TEST_tej_Tvir_definition=True
-    
+    TEST_tej_Tvir_definition=False  
 )
 run_latest = latest_model.run_halo()
 results_latest = latest_model.get_results()
@@ -557,7 +553,7 @@ ax0.set(
     ylim=(1e-3, 0.3),
 )
 # add the behroozi in panel
-ax0.text(0.01,0.15, "Behroozi et. al. 2019", transform=ax0.transAxes, rotation=32, va="bottom", ha="left", fontsize=9)
+ax0.text(0.01,0.15, "Behroozi et. al. 2019", transform=ax0.transAxes, rotation=35, va="bottom", ha="left", fontsize=9)
 
 # add a text showing the redshift in the bottom right
 ax0.text(
@@ -712,7 +708,7 @@ ax7.set_ylabel(ylabel="frac. diff", fontsize=9)
 ax7.set_xticklabels([])
 
 # accreting
-ax[9].plot(results_latest["t"], results_latest["egy_accrete"], color=color_latest, lw=3)
+ax[9].plot(results_latest["t"], results_latest["egy_cgm_in"], color=color_latest, lw=3)
 ax[9].plot(results["t"], results["egy_accrete"], color=color_baseline, lw=3, ls="--")
 ax[9].set(
     ylabel=r"$E_{\rm CGM, in}$",
@@ -722,7 +718,7 @@ ax[9].set(
     xscale="log",
 )
 ax9 = ax[9].inset_axes([0, -0.3, 1, 0.3])
-ax9.plot(results_latest["t"], (results_latest["egy_accrete"] - results["egy_accrete"]) / results["egy_accrete"], color=color_cgm , lw=1.5)
+ax9.plot(results_latest["t"], (results_latest["egy_cgm_in"] - results["egy_accrete"]) / results["egy_accrete"], color=color_cgm , lw=1.5)
 ax9.set( xlim=(0.25, results["t"][-1]), ylim=(-1.5, 1.5), xscale="log")
 ax9.axhline(0, color="k", lw=0.5, ls=":")
 ax9.set_ylabel(ylabel="frac. diff", fontsize=9)
@@ -787,7 +783,7 @@ for i, axes in enumerate(ax):
         # turn on minor ticks for all axes
         axes.minorticks_on()
 
-# plt.savefig("./figures/integrated_mw_mass.png", dpi=200, bbox_inches="tight", pad_inches=0.05)
+plt.savefig("./figures/integrated_mw_mass_KS1998.png", dpi=200, bbox_inches="tight", pad_inches=0.05)
 
 plt.show()
 # %%

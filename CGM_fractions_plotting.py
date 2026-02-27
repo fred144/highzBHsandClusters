@@ -13,6 +13,7 @@ import astropy.units as u
 from tqdm import tqdm
 from scipy.interpolate import RegularGridInterpolator
 from astropy.table import Table, join, hstack, vstack
+
 # from cgm_sf_regulator import CGMRegulator, mhalo_at_z0, halo_diagnostics_v2
 from cgm_sf_regulator_baseline import CGMRegulatorBaseline
 from astropy.units import Quantity
@@ -107,8 +108,6 @@ def vcirc_from_virial_T(Tvir, mu=0.59):
     return np.sqrt((2 * kb * Tvir) / (mu * mp)).to(u.km / u.s)
 
 
-
-
 zbins_str = [
     "0.2 < z < 0.5",
     "0.5 < z < 0.8",
@@ -167,7 +166,7 @@ cmap_colors.append((0.5, 0.5, 0.5))  # add grey color
 
 # %%
 # write to file
-file = "./runs/smhm_2phase_redshift_scan_KS_kap0p1_rd_0p02.h5"
+file = "./runs/smhm_2phase_redshift_scan_KS1998_16_bins_kappa0p02_n1p8_r0p018.h5"
 
 if not os.path.exists(file):
     redshift_variation, zsims = run_2phase_model_redshift_grid(
@@ -185,7 +184,12 @@ else:
 # %%
 
 fig, ax = plt.subplots(
-    2, 2, figsize=(10, 5), dpi=300, gridspec_kw={"height_ratios": [3, 2]}, sharex=True,
+    2,
+    2,
+    figsize=(10.25, 5),
+    dpi=300,
+    gridspec_kw={"height_ratios": [3, 2]},
+    sharex=True,
 )
 plt.subplots_adjust(hspace=0.05)
 
@@ -198,29 +202,31 @@ mcgm_total = mcgm_cold + mcgm_hot
 rvirs = virial_radius(redshifts, mhalo_obs * u.Msun)  # virial radius in kpc
 halo_Tvirs = virial_T(mhalo_obs * u.Msun, rvirs)  # virial temperature in K
 for i, z in enumerate(redshifts):
+    mask = halo_Tvirs[i] < 1e6 * u.K
 
-   
-    mask = halo_Tvirs[i] < 1e6 *u.K
-    
-    ax[0, 0].plot(
-        mhalo_obs[i][mask], mcgm_cold[i][mask], color=cmap_colors[i], label=f"${z:.1f}$", lw=2
+    ax[0, 0].plot(mhalo_obs[i][mask], mcgm_cold[i][mask], color=cmap_colors[i], lw=2)
+    ax[0, 1].plot(
+        mhalo_obs[i][mask],
+        mcgm_hot[i][mask],
+        color=cmap_colors[i],
+       
+        lw=2,
     )
-    ax[0, 1].plot(mhalo_obs[i][mask], mcgm_hot[i][mask], color=cmap_colors[i], label=f"${z:.1f}$", lw=2)
     ax[1, 0].plot(
         mhalo_obs[i][mask],
         mcgm_cold[i][mask] / mcgm_total[i][mask],
         color=cmap_colors[i],
-        label=f"${z:.1f}$",
-        lw=2
+       
+        lw=2,
     )
     ax[1, 1].plot(
         mhalo_obs[i][mask],
         mcgm_hot[i][mask] / mcgm_total[i][mask],
         color=cmap_colors[i],
         label=f"${z:.1f}$",
-        lw=2
+        lw=2,
     )
-    
+
     # Plot the "rest" (where Tvir >= 1e6 K) as dotted lines
     # Find the transition index where Tvir crosses 1e6 K
     rest_mask = ~mask
@@ -231,10 +237,18 @@ for i, z in enumerate(redshifts):
         last_valid_idx = first_rest_idx - 1 if first_rest_idx > 0 else 0
 
         # prepare arrays including the overlap point
-        mhalo_overlap = np.concatenate(([mhalo_obs[i][last_valid_idx]], mhalo_obs[i][rest_mask]))
-        mcgm_cold_overlap = np.concatenate(([mcgm_cold[i][last_valid_idx]], mcgm_cold[i][rest_mask]))
-        mcgm_hot_overlap = np.concatenate(([mcgm_hot[i][last_valid_idx]], mcgm_hot[i][rest_mask]))
-        mcgm_total_overlap = np.concatenate(([mcgm_total[i][last_valid_idx]], mcgm_total[i][rest_mask]))
+        mhalo_overlap = np.concatenate(
+            ([mhalo_obs[i][last_valid_idx]], mhalo_obs[i][rest_mask])
+        )
+        mcgm_cold_overlap = np.concatenate(
+            ([mcgm_cold[i][last_valid_idx]], mcgm_cold[i][rest_mask])
+        )
+        mcgm_hot_overlap = np.concatenate(
+            ([mcgm_hot[i][last_valid_idx]], mcgm_hot[i][rest_mask])
+        )
+        mcgm_total_overlap = np.concatenate(
+            ([mcgm_total[i][last_valid_idx]], mcgm_total[i][rest_mask])
+        )
 
         ax[0, 0].plot(
             mhalo_overlap, mcgm_cold_overlap, color=cmap_colors[i], lw=2, ls=":"
@@ -247,58 +261,257 @@ for i, z in enumerate(redshifts):
             mcgm_cold_overlap / mcgm_total_overlap,
             color=cmap_colors[i],
             lw=2,
-            ls=":"
+            ls=":",
         )
         ax[1, 1].plot(
             mhalo_overlap,
             mcgm_hot_overlap / mcgm_total_overlap,
             color=cmap_colors[i],
             lw=2,
-            ls=":"
+            ls=":",
         )
-    
-    
+
 
 ax[0, 0].set(
     xscale="log",
     yscale="log",
     # xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
     ylabel=r"$M_{\mathrm{CGM,cold}}$ [M$_{\odot}$]",
-    xlim=(1e10, 1e13),
-    ylim=(2e5, 3e11),
+    xlim=(1e10, 9.5e12),
+    ylim=(2e5, 2e11),
 )
 ax[0, 1].set(
     xscale="log",
     yscale="log",
     # xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
     ylabel=r"$M_{\mathrm{CGM,hot}}$ [M$_{\odot}$]",
-    xlim=(1e10, 1e13),
-    ylim=(1e7, 1e12),
+    xlim=(1e10, 9.5e12),
+    ylim=(2e5, 2e11),
 )
 ax[1, 0].set(
     xscale="log",
     xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
-    ylabel=r"$M_{\mathrm{CGM,cold}} / M_{\mathrm{CGM}}$",
-    xlim=(1e10, 1e13),
-    ylim=(-0.1, 1.1),
+    # ylabel=r"$M_{\mathrm{CGM,cold}} / M_{\mathrm{CGM}}$",
+    ylabel=r"${\rm CGM~ mass~ fraction }$",
+    xlim=(1e10, 9.5e12),
+    ylim=(-0.1, 0.75),
 )
 ax[1, 1].set(
     xscale="log",
     xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
-    ylabel=r"$M_{\mathrm{CGM,hot}} / M_{\mathrm{CGM}}$",
-    xlim=(1e10, 1e13),
-    ylim=(-0.1, 1.1),
+    xlim=(1e10, 9.5e12),
+    ylim=(0.20, 1.1),
 )
-ax[0, 0].legend(
-    frameon=False, loc="lower right",  fontsize=9, ncol=2, title=r"redshift $z$"
+# ax[1, 1].set(
+#     xscale="log",
+#     xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
+#     ylabel=r"$M_{\mathrm{CGM,hot}} / M_{\mathrm{CGM}}$",
+#     xlim=(1e10, 9.5e12),
+#     ylim=(-0.1, 1.1),
+# )
+
+
+# add baryonic limit as shaded region
+baryon_limit = f_b * mhalo_obs[-1]
+ax[0, 0].fill_between(mhalo_obs[-1], baryon_limit, 1e12, alpha=0.5, facecolor="grey")
+ax[0, 0].text(
+    2e10,
+    5e9,
+    r"$f_{\rm b} M_{\rm halo}$",
+    fontsize=10,
+    rotation=18,
+    color="black",
+    ha="left",
 )
+ax[0, 1].fill_between(mhalo_obs[-1], baryon_limit, 1e12, alpha=0.5, facecolor="grey")
+
+
+# ================= OBSERVATIONS
+## fearman and werk 23, https://iopscience.iop.org/article/10.3847/1538-4357/acf217/pdf
+##0.1  <z < 0.4 galaxies observed in the COS-Halos/eCGM surveys.
+mh_fw23 = 1e12
+mcool_fw23 = 3e9
+mcool_fw23_dex_scatter = 0.5
+mcool_fw23_err_lower = (
+    10 ** (np.log10(mcool_fw23) - mcool_fw23_dex_scatter) - mcool_fw23
+)
+mcool_fw23_err_upper = (
+    10 ** (np.log10(mcool_fw23) + mcool_fw23_dex_scatter) - mcool_fw23
+)
+mcool_fw23_err = [[-mcool_fw23_err_lower], [mcool_fw23_err_upper]]
+ax[0, 0].errorbar(
+    mh_fw23,
+    mcool_fw23,
+    yerr=mcool_fw23_err,
+    fmt="o",
+    color="black",
+    label=r"COS-Halos, $z = 0.1 - 0.4$ (Fearman \& Werk 2023)",
+    # label=r"COS-Halos (Faerman \& Werk 2023)",
+    zorder=10,
+    markersize=6,
+    lw=1.5,
+    alpha=0.7,
+)
+
+# Yong Zheng et al. 2024 https://iopscience.iop.org/article/10.3847/1538-4357/acfe6b/pdf
+mh_range_zheng24 = (10**10, 10**11.5)
+mh_median_zheng24 = 10**10.9
+mcool_zheng24 = 10**8.4
+ax[0, 0].errorbar(
+    mh_median_zheng24,
+    mcool_zheng24,
+    xerr=[
+        [mh_median_zheng24 - mh_range_zheng24[0]],
+        [mh_range_zheng24[1] - mh_median_zheng24],
+    ],
+    fmt="s",
+    color="k",
+    label=r"nearby dwarfs (Zheng et al. 2024)",
+    zorder=10,
+    markersize=6,
+    lw=1.5,
+    alpha=0.7,
+)
+
+# upper limits on dwarfs faerman et al https://ui.adsabs.harvard.edu/abs/2025ApJ...982L..30F/abstract
+mh_bin_1 = (10**10.2, 10**10.8)
+mh_bin_2 = (10**10.8, 10**11.15)
+mh_bin_3 = (10**11.15, 10**11.5)
+
+mh_centers = [3.2e10, 7.9e10, 2e11]  # actual centers of the bins
+
+mh_errs = [
+    [mh_centers[i] - mh_bin[0] for i, mh_bin in enumerate([mh_bin_1, mh_bin_2, mh_bin_3])],
+    [mh_bin[1] - mh_centers[i] for i, mh_bin in enumerate([mh_bin_1, mh_bin_2, mh_bin_3])],
+]
+
+mcold_clumpy = [4.2e7, 9.5e7, 1.4e8]
+ax[0, 0].errorbar(
+    mh_centers,
+    mcold_clumpy,
+    xerr=mh_errs,
+    fmt="^",
+    color="k",
+    label=r"nearby dwarfs, clumpy CGM (Faerman et al. 2025)",
+    zorder=10,
+    markersize=6,
+    lw=1.5,
+    alpha=0.7,
+)
+
+# COS-Halos, Werk+2014 https://arxiv.org/abs/1403.0947
+# mhalo_werk24 = 10**12.2 # msun
+# mcool_werk24_lower = 7e10
+# mcool_werk24_upper = 12e10
+# mcool_werk24_cold_mass = (mcool_werk24_lower + mcool_werk24_upper) / 2
+# ax[0, 0].errorbar(
+#     mhalo_werk24,
+#     mcool_werk24_cold_mass,
+#     yerr=[[mcool_werk24_cold_mass - mcool_werk24_lower], [mcool_werk24_upper - mcool_werk24_cold_mass]],
+#     fmt="o",
+#     color="tab:green",
+#     label="COS-Halos (Werk+2014)",
+#     zorder=10,
+#     markersize=6,
+#     lw=1.5,
+# )
+
+## zahedy +19 (https://academic.oup.com/mnras/article/484/2/2257/5256659#:~:text=halo%20mass%20in%20COS%2DLRG)
+# z ~0.4
+mh_zahedy19 = 10**13
+mcool_z19_low = 1e10
+mcool_z19_up = 2e10
+mcool_z19 = (mcool_z19_low + mcool_z19_up) / 2
+# ax[0, 0].errorbar(
+#     mh_zahedy19,
+#     mcool_z19,
+#     yerr=[[mcool_z19 - mcool_z19_low], [mcool_z19_up - mcool_z19]],
+#     fmt="s",
+#     color="black",
+#     # label="Zahedy et al. 2019",
+#     zorder=10,
+#     markersize=5,
+#     lw=2,
+# )
+
+## werk et al 2014, figure 11 https://iopscience.iop.org/article/10.1088/0004-637X/792/1/8/pdf
+mh_werk14 = 10**12.2
+mhot_werk14_range = [1e9, 14e9]
+mhot_werk14 = (mhot_werk14_range[0] + mhot_werk14_range[1]) / 2
+mhot_werk_err = [[mhot_werk14 - mhot_werk14_range[0]], [mhot_werk14_range[1] - mhot_werk14]]
+
+mwarm_werk14_range = [1e10, 1e11]
+mwarm_werk14 = (mwarm_werk14_range[0] + mwarm_werk14_range[1]) / 2
+mwarm_werk_err = [[mwarm_werk14 - mwarm_werk14_range[0]], [mwarm_werk14_range[1] - mwarm_werk14]]
+
+mwarmhot_werk14_total = mwarm_werk14 + mhot_werk14
+
+err_lower = np.sqrt(mwarm_werk_err[0][0]**2 + mhot_werk_err[0][0]**2)
+err_upper = np.sqrt(mwarm_werk_err[1][0]**2 + mhot_werk_err[1][0]**2)
+mwarmhot_werk14_total_err = [[err_lower], [err_upper]]
+ax[0, 1].errorbar(
+    mh_werk14,
+    mwarmhot_werk14_total,
+    yerr=mwarmhot_werk14_total_err,
+    fmt="D",
+    color="k",
+    label=r"COS-Halos, warm+hot" "\n""(Tumlinson et al. 2011; Peeples et al. 2014;" "\n" " Anderson et al. 2013; Werk et al. 2014)",
+    zorder=10,
+    markersize=6,
+    lw=1.5,
+    alpha=0.7,
+)
+
+
+### marvels
+import pandas as pd
+
+df = pd.read_csv("./data/marvel_dwarfs.csv")
+marvels_m200c = 10**df["M_200c"].values   # convert to Msun
+marvels_mcgmwarm = 10**df["M_Warm_CGM"].values
+# ax[0, 1].scatter(
+#     marvels_m200c,
+#     marvels_mcgmwarm,
+#     facecolor="k",
+#     marker="v",
+#     label=r"Marvel-ous Dwarfs warm CGM (Piacitelli et al. 2024)",
+#     zorder=0,
+#     s=10,
+#     alpha=0.5,
+# )
+
+# ====================end observations
+
+
+ax[1, 1].legend(
+    frameon=False,
+    loc="lower center",
+    fontsize=10,
+    ncol=9,
+    title=r"$z$",
+    bbox_to_anchor=(-0.1, 2.6),
+    handletextpad=0.3,
+)
+ax[0, 1].legend(frameon=False, loc="lower right", fontsize=8, ncol=1, handletextpad=0.1, columnspacing=0.5)
+# rescale legend markers
+ax[0, 0].legend(frameon=False, loc="lower right", fontsize=8,  ncols=1, handletextpad=0.1, columnspacing=0.5, markerscale=0.8)
+
+# show a grid
+# ax[0, 0].grid(alpha=0.3, which="both")
+# ax[0, 1].grid(alpha=0.3, which="both")
+# ax[1, 0].grid(alpha=0.3, which="both")
+# ax[1, 1].grid(alpha=0.3, which="both")
+
 
 for axes in ax.ravel():
     for line in axes.lines:
         line.set_zorder(1)
-        
+
 plt.savefig(
-    "./figures/twophase_CGM_fractions.png", dpi=200, bbox_inches="tight", pad_inches=0.05
+    "./figures/twophase_CGM_fractions.png",
+    dpi=200,
+    bbox_inches="tight",
+    pad_inches=0.05,
 )
 plt.show()
 

@@ -158,13 +158,13 @@ print(zobs)
 print(mhalos[0])
 
 # kappa_sfr = 0.1
-kappa_sfrs = np.geomspace(0.01, 10, 10)[::-1]
+kappa_sfrs = [0.02]#np.geomspace(0.01, 10, 10)[::-1]
 # kappa_sfr = 1
 # n_sfrs = np.linspace(1.3, 1.5, 10)
 # r_disk_sfrs = np.geomspace(0.011, 0.1, 15)
-r_disk_sfr = 0.02
+r_disk_sfr = 0.018
 # n_sfrs = [1.4]
-n_sfrs = np.linspace(1.1, 2.0, 10)
+n_sfrs = [1.8] #np.linspace(1.1, 2.0, 10)
 # kappa_sfr = 1.0
 for j, n_sfr in enumerate(n_sfrs):
     
@@ -172,7 +172,7 @@ for j, n_sfr in enumerate(n_sfrs):
     kappa_sfr = kappa_sfrs[j]
     
     param_txt = (
-    f"KS1998_kappa{str(kappa_sfr).replace('.', 'p')}_"
+    f"KS_1998_kappa{str(kappa_sfr).replace('.', 'p')}_"
     + f"n{str(n_sfr).replace('.', 'p')}_"
     + f"r{str(r_disk_sfr).replace('.', 'p')}"
 )
@@ -256,7 +256,7 @@ for j, n_sfr in enumerate(n_sfrs):
     l1 = lines[0]
     labelLine(
         l1,
-        1e9,
+        2e9,
         label=r"$z={}$".format(zs[0]),
         align=False,
         yoffset=0.0,
@@ -269,7 +269,7 @@ for j, n_sfr in enumerate(n_sfrs):
         lines[1:],
         xvals=np.geomspace(1e9, 1e12, len(lines) - 1),
         yoffsets=0.01,
-        align=False,
+        align="right",
         fontsize=7,
         ha="right",
         backgroundcolor="none",
@@ -698,12 +698,12 @@ for j, n_sfr in enumerate(n_sfrs):
     inset_ax_2.legend(frameon=False)
     inset_ax_3.legend(frameon=False)
  
-    plt.savefig(
-        f"./figures/KS98scan_nkappa_variation/{j:02d}_ism_gas_fractions_{param_txt}.png",
-        dpi=200,
-        bbox_inches="tight",
-        pad_inches=0.05,
-    )
+    # plt.savefig(
+    #     f"./figures/KS98scan_nkappa_variation/{j:02d}_ism_gas_fractions_{param_txt}.png",
+    #     dpi=200,
+    #     bbox_inches="tight",
+    #     pad_inches=0.05,
+    # )
     plt.show()
 # %% now, do single runs
 mass_bins = 10
@@ -715,9 +715,9 @@ print(zobs)
 print(mhalos[0])
 
 #### XXX
-n_sfr = 1.4
-r_disk_sfr = 0.02
-kappa_sfr = 1.0
+n_sfr = 1.8
+r_disk_sfr = 0.018
+kappa_sfr = 0.02
 
 param_txt = (
     f"KS_1998_kappa{str(kappa_sfr).replace('.', 'p')}_"
@@ -803,7 +803,7 @@ lines = ax[0].get_lines()
 l1 = lines[0]
 labelLine(
     l1,
-    1e9,
+    3e10,
     label=r"$z={}$".format(zs[0]),
     align=False,
     yoffset=0.0,
@@ -818,7 +818,7 @@ labelLines(
     yoffsets=0.01,
     align=False,
     fontsize=7,
-    ha="right",
+    # ha="left",
     backgroundcolor="none",
     # color="black",
 )
@@ -1070,7 +1070,7 @@ ax[1].plot(
     ls="-.",
     color="darkorange",
     zorder=0,
-    label=r"${\rm SFMS~ Renzini ~& ~Peng ~2015}$",
+    label=r"${\rm SFMS~ (Renzini ~& ~Peng ~2015)}$",
 )
 
 
@@ -1103,7 +1103,7 @@ ax[1].plot(
     zorder=0,
     label=r"${\rm SFMS~}$"
     + r"$~0.01 < z < 0.05$"
-    + r"${~\rm Saintonge ~& ~Catinella ~2022}$",
+    + r"${~\rm (Saintonge ~& ~Catinella ~2022)}$",
 )
 
 # add 0.4 dex scatter region
@@ -1182,7 +1182,7 @@ custom_legend_elements = [
         [0],
         color="thistle",
         lw=2,
-        label=r"$\rm{LTGs~double~power~law~Calette ~ et ~al. ~2018}$",
+        label=r"$\rm{LTGs~double~power~law~(Calette ~ et ~al. ~2018)}$",
     ),
     Line2D(
         [0],
@@ -1196,7 +1196,7 @@ custom_legend_elements = [
         alpha=0.5,
         label=r"$\rm{xGASS}~$"
         + r"$0.01 < z < 0.05$"
-        + r"$\rm{~Catinella ~et ~al. ~2018}$",
+        + r"$\rm{~(Catinella ~et ~al. ~2018)}$",
     ),
     Line2D(
         [0],
@@ -1210,14 +1210,14 @@ custom_legend_elements = [
         alpha=0.5,
         label=r"$\rm{gas-rich~dwarfs}~$"
         + r"$z\sim0$"
-        + r"$\rm{~ Mancera ~Piña ~et ~al. ~2025 }$",
+        + r"$\rm{~ (Mancera ~Piña ~et ~al. ~2025)}$",
     ),
 ]
 ax[0].legend(
-    handles=custom_legend_elements, loc="lower left", frameon=False, fontsize=8
+    handles=custom_legend_elements, loc="upper right", frameon=False, fontsize=8.5
 )
 
-ax[1].legend(frameon=False, fontsize=8, loc="lower right")
+ax[1].legend(frameon=False, fontsize=9, loc="lower right")
 
 
 # ax[0].legend(
@@ -1230,12 +1230,12 @@ ax[1].legend(frameon=False, fontsize=8, loc="lower right")
 # )
 
 ax[0].set(
-    xscale="log", yscale="log", ylabel=r"$M_{\rm {ISM}}/M_\star$", ylim=(8e-2, 30)
+    xscale="log", yscale="log", ylabel=r"$M_{\rm {ISM}}/M_\star$", ylim=(0.15, 30)
 )
 ax[1].set(
     xscale="log",
     yscale="log",
-    xlabel=r"$M_\star$ [M$_\odot$]",
+    xlabel=r"$\rm M_\star [M_\odot]$",
     ylabel=r"${\rm SFR ~[M_\odot ~yr^{-1}]}$",
     xlim=(8e6, 8e11),
     ylim=(2e-4, 9),
@@ -1243,18 +1243,18 @@ ax[1].set(
 
 
 # add text for the KS parameters used
-ax[0].set_title(
-    rf"KS 1998: $\kappa={kappa_sfr:.4f}$, $n={n_sfr:.4f}$, $r_{{\rm disk}}={r_disk_sfr:.4f} R_{{\rm vir}}$",
-    transform=ax[0].transAxes,
-    fontsize=10,
-)
-
-# plt.savefig(
-#     f"./figures/KS_ism_gas_fraction_rdisk_scan/{j:02d}_ism_gas_fractions_{param_txt}.png",
-#     dpi=200,
-#     bbox_inches="tight",
-#     pad_inches=0.05,
+# ax[0].set_title(
+#     rf"KS 1998: $\kappa={kappa_sfr:.4f}$, $n={n_sfr:.4f}$, $r_{{\rm disk}}={r_disk_sfr:.4f} R_{{\rm vir}}$",
+#     transform=ax[0].transAxes,
+#     fontsize=10,
 # )
+
+plt.savefig(
+    f"./figures/ism_gas_fractions_{param_txt}.png",
+    dpi=200,
+    bbox_inches="tight",
+    pad_inches=0.01,
+)
 plt.show()
 # %% metallicity plot
 
