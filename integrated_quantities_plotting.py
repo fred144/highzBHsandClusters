@@ -397,7 +397,7 @@ smhm_err_low = 10 ** SMHMerr[0, :]
 # for axes in ax:
 #     for line in axes.lines:
 #         line.set_zorder(1)
-# # plt.savefig("./figures/fig1_mw_mass_old.png", dpi=200, bbox_inches="tight", pad_inches=0.05)
+# # plt.savefig("./final_figs/fig1_mw_mass_old.pdf", dpi=200, bbox_inches="tight", pad_inches=0.05)
 
 # plt.show()
 # %% new verions
@@ -440,7 +440,7 @@ else:
     print(f.keys())
 
 # latest model grid
-file_latest_model = "./runs/smhm_2phase_redshift_scan_KS1998_kappa0p02_n1p8_r0p018.h5"
+file_latest_model = "./runs/redshift_scan_KS_1998_kappa_updated_0p02_n1p8_r0p018_etaZ0p7_alphaE0p1_alphaM0p1.h5"
 if not os.path.exists(file_latest_model):
     redshift_variation, zsims = run_2phase_model_redshift_grid(
         observe_at=[0.01],  # redshift we want to observe
@@ -470,13 +470,35 @@ latest_model = CGMRegulator(
     KS_n = 1.8,
     disk_scale_length=0.018,
     KS_parametrization="KS1998",
-    TEST_tej_Tvir_definition=False  
+    TEST_tej_Tvir_definition=False,
+    eta_z=0.7,
+    alpha_e=0.1,
+    alpha_m=0.1,
 )
 run_latest = latest_model.run_halo()
 results_latest = latest_model.get_results()
 derived_latest = latest_model.get_derived_quantities()
 t_adaptive = results_latest["t"]
 
+#%% STIFFNESS CHECK
+stiff = latest_model.quantify_stiffness(
+    n_samples=8,
+    include_mode_sources=True,
+    top_n=4,
+)
+
+print("max stiffness ratio:", stiff["max_stiffness_ratio"])
+print("median stiffness ratio:", stiff["median_stiffness_ratio"])
+
+for s in stiff["samples"]:
+    print(
+        s["t_gyr"],
+        s["stiffness_ratio"],
+        s["fastest_timescale_gyr"],
+        s.get("dominant_variables", []),
+    )
+
+#%%
 baseline_model = CGMRegulatorBaseline(
     mhalo_z0,
     time_interval=t_adaptive,  # use the same time array as the latest model for direct comparison
@@ -542,7 +564,7 @@ ax0.plot(
     ls="--",
 )
 ax0.legend(
-    loc="upper center", ncol=3, frameon=False, fontsize=10
+    loc="upper center", ncol=3, frameon=False, fontsize=11
 )
 ax0.set(
     xlabel=r"$M_{\rm halo}$ [M$_\odot$]",
@@ -553,7 +575,7 @@ ax0.set(
     ylim=(1e-3, 0.3),
 )
 # add the behroozi in panel
-ax0.text(0.01,0.15, "Behroozi et. al. 2019", transform=ax0.transAxes, rotation=35, va="bottom", ha="left", fontsize=9)
+ax0.text(0.01,0.15, "Behroozi et. al. 2019", transform=ax0.transAxes, rotation=37, va="bottom", ha="left", fontsize=10)
 
 # add a text showing the redshift in the bottom right
 ax0.text(
@@ -775,7 +797,7 @@ for i, axes in enumerate(ax):
         axes.text(
             0.05, 0.90, panel_labels[i],
             transform=axes.transAxes,
-            fontsize=10,
+            fontsize=11,
             fontweight="bold",
             va="top",
             ha="left",
@@ -783,7 +805,7 @@ for i, axes in enumerate(ax):
         # turn on minor ticks for all axes
         axes.minorticks_on()
 
-plt.savefig("./figures/integrated_mw_mass_KS1998.png", dpi=200, bbox_inches="tight", pad_inches=0.05)
+plt.savefig("./final_figs/fig_1_integrated_mw_mass.pdf", dpi=200, bbox_inches="tight", pad_inches=0.05)
 
 plt.show()
 # %%

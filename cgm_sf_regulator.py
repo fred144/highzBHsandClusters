@@ -85,7 +85,16 @@ class CoolingFunctionInterpolator:
             # print(self.metallicities)
 
     def cooling_function(self, temperature, metallicity):
-        log_temp = np.log10(temperature)
+        if np.ndim(temperature) == 0:
+            if metallicity <= 0:
+                return 0.0
+            # Table is indexed by log10(T); clamp temperatures below 10^4 K
+            # to the table minimum instead of extrapolating.
+            log_temp = np.log10(max(float(temperature), 1e4))
+            log_temp = min(log_temp, self.temperatures[-1])
+        else:
+            safe_temperature = np.maximum(np.asarray(temperature, dtype=float), 1e4)
+            log_temp = np.log10(safe_temperature)
         log_metallicity = np.log10(metallicity)
         # print(log_temp,  log_metallicity)
         log_lambda = self.interpolator((log_temp, log_metallicity))
@@ -255,6 +264,19 @@ def vcirc_energy_loading(halo_vcirc, alpha_e=0.1):
     eta_e = alpha_e * (halo_vcirc.value / 200) ** (-3 / 2)
 
     # if eta e > 1 set to 1, halo_vcirc can be float or array
+    if np.any(eta_e > 1):
+        eta_e = np.where(eta_e > 1, 1, eta_e)
+    else:  # it's a float
+        if eta_e > 1:
+            eta_e = 1
+    return eta_e
+
+
+def metallicity_energy_loading(ism_metalllicity_z_sun, alpha_e=0.3, beta=-0.5):
+    """energy loading factor as a function of ISM metallicity, power-law form"""
+    eta_e = alpha_e * (ism_metalllicity_z_sun) ** beta
+
+    # if eta e > 1 set to 1, ism_metallicity can be float or array
     if np.any(eta_e > 1):
         eta_e = np.where(eta_e > 1, 1, eta_e)
     else:  # it's a float
@@ -829,13 +851,13 @@ class CGMRegulator:
         mhalo_z0,
         time_interval,
         tstep=1,
-        eta_z=0.3,
+        eta_z=0.7,
         verbose=False,
         dep_time_norm=0.4,
         cooling_dynamic_time_norm=1,
-        disk_scale_length=0.02,
-        KS_n=1.5,
-        KS_kappa_s=10,
+        disk_scale_length=0.018,
+        KS_n=1.8,
+        KS_kappa_s=0.02,
         r_bulge=1,
         dbug_norm_for_accretion_energy_rate=1,
         dbug_norm_for_2_phase_CGM=0,
@@ -850,6 +872,7 @@ class CGMRegulator:
         custom_cooling_params=None,
         KS_parametrization="KS1998",
         cooling_tables="SutherlandDopita93",
+        eta_E_scaling_with_Z=None,
         TEST_tej_Tvir_definition=False,
         # ep_bh_radeff=0.1,                 # BH things not currently being used
         # ep_bh_feedback_eff=0.02,
@@ -870,9 +893,17 @@ class CGMRegulator:
         
         self.cooling_tables = cooling_tables
         
-        self.evaluation_time_array = np.arange(
-            self.time_interval[0], self.time_interval[1], self.tstep
-        )
+        if self.tstep != 1:
+            # Custom output cadence mode: include the end time explicitly.
+            t0, t1 = self.time_interval
+            self.evaluation_time_array = np.arange(t0, t1 + 0.5 * self.tstep, self.tstep)
+            self.evaluation_time_array = self.evaluation_time_array[
+                self.evaluation_time_array <= t1
+            ]
+            if len(self.evaluation_time_array) == 0 or self.evaluation_time_array[-1] < t1:
+                self.evaluation_time_array = np.append(self.evaluation_time_array, t1)
+        else:
+            self.evaluation_time_array = None
 
         self.eta_z = eta_z # metal loading
         self.metal_yield = 0.02
@@ -908,6 +939,7 @@ class CGMRegulator:
         self.eta_E = alpha_e
 
         self.TEST_tej_Tvir_definition = TEST_tej_Tvir_definition
+        self.eta_E_scaling_with_Z = eta_E_scaling_with_Z
 
         # self.cooling_fn = cooling_fn_generator(
         #     "./tables/Lambda_tab_redshifts.npz"
@@ -970,7 +1002,7 @@ class CGMRegulator:
         cm_per_km = 1e5
         kb_erg_per_K = consts.k_B.to(u.erg / u.K).value
         mu_g = (0.6 * consts.m_p).to(u.g).value
-        mass_floor_msun = 1e-21  # Msun
+        mass_floor_msun = 1000  # Msun
         vel_floor_kms = 1e-21  # km/s
         time_floor_gyr = 1e-21  # Gyr
         erg_per_Gyr_floor = 1e-21
@@ -988,12 +1020,38 @@ class CGMRegulator:
         m_metals_cgm = float(mass[5])  # Msun (metal mass in Msun)
         m_metals_ism = float(mass[6])  # Msun (metal mass in Msun)
         m_halo = float(mass[7])  # Msun
-        e_ism_wind = float(mass[8])  # erg
-        e_cgm_cool = float(mass[9])  # erg
-        e_cgm_out = float(mass[10])  # erg
-        e_cgm_in = float(mass[11])  # erg
-        e_cgm = float(mass[12])  # erg
+        # Backward compatibility: accept both legacy (13-state) and current (9-state)
+        # vectors so older analysis scripts can still call mass_evolution safely.
+        if len(mass) >= 13:
+            e_ism_wind = float(mass[8])  # erg
+            e_cgm_cool = float(mass[9])  # erg
+            e_cgm_out = float(mass[10])  # erg
+            e_cgm_in = float(mass[11])  # erg
+            e_cgm = float(mass[12])  # erg
+        else:
+            # Diagnostic energy channels are reconstructed after integration.
+            e_ism_wind = 0.0
+            e_cgm_cool = 0.0
+            e_cgm_out = 0.0
+            e_cgm_in = 0.0
+            e_cgm = float(mass[8])  # erg
+
+        # m_cgm_cold = max(m_cgm_cold, mass_floor_msun)  # ensure non-negative, non-zero for metallicity calc
+        # m_cgm_hot = max(m_cgm_hot, mass_floor_msun)  # ensure non-negative, non-zero for metallicity calc
         
+        # Use safe, non-negative masses for divisions and power-law inputs.
+        m_cgm_safe = max(m_cgm, mass_floor_msun)
+        m_ism_safe = max(m_ism, mass_floor_msun)
+        m_metals_cgm_safe = max(m_metals_cgm, 0.0)
+        m_metals_ism_safe = max(m_metals_ism, 0.0)
+
+        # CGM metallicity (in solar units)
+        cgm_metallicity = m_metals_cgm_safe / m_cgm_safe  # metal mass fraction
+        cgm_metallicity_sol = cgm_metallicity / self.Z_sol
+
+        # ISM metallicity
+        ism_metallicity = m_metals_ism_safe / m_ism_safe
+        ism_metallicity_sol = ism_metallicity / self.Z_sol
 
         # m_bh = mass[12] * u.solMass        # Total black hole mass
 
@@ -1017,6 +1075,18 @@ class CGMRegulator:
             self.eta_e = vcirc_energy_loading(
                 halo_vcirc_kms * u.km / u.s, alpha_e=self.eta_E
             )
+            ## if eta_E_scaling_with_Z is a tuple and is not None
+            if self.eta_E_scaling_with_Z is not None and isinstance(self.eta_E_scaling_with_Z, tuple):
+                # print("Using eta_E with Z dependence", "m_metals_ism", m_metals_ism, "ism_metallicity_sol", ism_metallicity_sol, "self.eta_E_scaling_with_Z", self.eta_E_scaling_with_Z)
+                self.eta_e = metallicity_energy_loading(
+                    ism_metallicity_sol,
+                    alpha_e=self.eta_E_scaling_with_Z[0],
+                    beta=self.eta_E_scaling_with_Z[1],
+                )
+            elif self.eta_E_scaling_with_Z is not None :
+                print("eta_E_scaling_with_Z is should be left along or a tuple with (normalization, power law index), leave this empty to use v_circ dependence")
+                TypeError("eta_E_scaling_with_Z should be a tuple with (normalization, power law index) or None")
+
         else:
             self.eta_m = custom_mass_loading(m_halo * u.solMass, A=10, alpha=-0.7)
             self.eta_e = custom_energy_loading(m_halo * u.solMass, A=0.1, alpha=-0.4)
@@ -1028,6 +1098,7 @@ class CGMRegulator:
             eta_e_val = np.asarray(self.eta_e).astype(float)
         if np.any(eta_e_val > 1):
             eta_e_val = np.where(eta_e_val > 1, 1.0, eta_e_val)
+
         self.eta_e = eta_e_val
 
         # compute CGM effective temperature (numeric K)
@@ -1038,23 +1109,15 @@ class CGMRegulator:
         else:
             e_per_mass_erg_per_g = 0.0
         # cgm_temp = (e_cgm/m_cgm_hot) * (mu / kb)  -> numeric K:
-        cgm_temp_K = e_per_mass_erg_per_g * (mu_g / kb_erg_per_K)
+        # Stability fix: impose a minimum temperature to avoid non-physical
+        # negative/near-zero values during implicit solver trial steps.
+        cgm_temp_K = max(e_per_mass_erg_per_g * (mu_g / kb_erg_per_K), 10.0)  # floor at 10 K
 
         # dynamical time estimate (use kpc and km/s -> seconds -> Gyr)
         # t_dynamical = r / v
         r_km = halo_rvir_kpc * (u.kpc.to(u.km))
         t_dynamical_sec = r_km / max(halo_vcirc_kms, vel_floor_kms)
         t_dynamical_Gyr = t_dynamical_sec / sec_per_Gyr
-
-        # CGM metallicity (in solar units)
-        m_cgm_safe = max(m_cgm, mass_floor_msun)
-        cgm_metallicity = m_metals_cgm / m_cgm_safe  # metal mass fraction
-        cgm_metallicity_sol = cgm_metallicity / self.Z_sol
-
-        # ISM metallicity
-        m_ism_safe = max(m_ism, mass_floor_msun)
-        ism_metallicity = m_metals_ism / m_ism_safe
-        ism_metallicity_sol = ism_metallicity / self.Z_sol
 
         ### density normalization rho0 (we compute unitless numeric in Msun/kpc^3)
         rho0_msun_per_kpc3 = density0(
@@ -1162,9 +1225,11 @@ class CGMRegulator:
         # total energy associated with that specific energy for the hot mass (erg)
         total_energy_erg = cgm_specific_e_erg_per_g * mass_hot_g
         # tcool (Gyr) = total_energy / dot_e_cgm_hot_loss (erg/Gyr)
-        tcool_Gyr = (
-            total_energy_erg / dot_e_cgm_hot_loss_erg_per_Gyr
-        )  # needsto be positive
+        # Stability fix: avoid singular divisions when cooling losses vanish.
+        if dot_e_cgm_hot_loss_erg_per_Gyr > 0:
+            tcool_Gyr = total_energy_erg / dot_e_cgm_hot_loss_erg_per_Gyr
+        else:
+            tcool_Gyr = 1e30  # effectively no cooling
 
         # prevent non-physical or negative
         tcool_Gyr = max(tcool_Gyr, time_floor_gyr)
@@ -1179,13 +1244,15 @@ class CGMRegulator:
             # if the cooling lambda is not actually cooling (e.g. due to custom params), set cooling rates to 0
             dot_m_cgm_hot_cooling = 0.0
         else:
-            dot_m_cgm_hot_cooling = m_cgm_hot / tcool_Gyr
+            # ensure m_cgm_hot is non-negative to prevent runaway instability
+            dot_m_cgm_hot_cooling = max(m_cgm_hot, 0.0) / tcool_Gyr
 
-        dot_m_cgm_cold_falling = m_cgm_cold / max(t_dynamical_Gyr, time_floor_gyr)
+        # ensure m_cgm_cold is non-negative to prevent runaway instability
+        dot_m_cgm_cold_falling = max(m_cgm_cold, 0.0) / max(t_dynamical_Gyr, time_floor_gyr)
 
         # star formation (KS-like) -- do unitless arithmetic (Msun, kpc)
         r_disk_kpc = self.disk_scale * halo_rvir_kpc
-        sigma0 = m_ism / (2.0 * np.pi * (r_disk_kpc**2))  # Msun / kpc^2
+        sigma0 = max(m_ism, 0.0) / (2.0 * np.pi * (r_disk_kpc**2))  # Msun / kpc^2, clamp to avoid NaN from negative m_ism
 
         if self.KS_parametrization == "KS1998":
             ### using original Kennicut law https://arxiv.org/pdf/astro-ph/9712213
@@ -1258,6 +1325,7 @@ class CGMRegulator:
             (1.0 - self.dbug_norm_for_2_phase_CGM) * dot_m_cgm_cold_falling
             + self.dbug_norm_for_2_phase_CGM * dot_m_cgm_hot_cooling
         )
+       
         dot_m_ism = (
             falling_into_ism - dot_m_sfr - float(self.eta_m) * dot_m_sfr
         )  # Msun / Gyr
@@ -1339,7 +1407,7 @@ class CGMRegulator:
         #         0.15
         #         * f_disk**2.5
         #         * (m_bh.value / 1e8) ** (1 / 6)
-        #         * (m_enclosed/ 1e9)   
+        #         * (m_enclosed/ 1e9)
         #         * (self.r_grav_physical / 0.1) ** (-3 / 2)
         #         * (1 + f_0 / f_gas) ** -1
         #     )
@@ -1402,33 +1470,75 @@ class CGMRegulator:
         )
 
         dot_m_metal_cgm = (
-            self.metal_yield * self.eta_z * dot_m_sfr
-            + self.Z_IGM * self.Z_sol * dot_m_cgm_in
-            - cgm_metallicity * dot_m_cgm_cold_falling
-            - cgm_metallicity * dot_m_cgm_out
+            self.metal_yield * self.eta_z * dot_m_sfr # metals directly injected
+            + self.Z_IGM * self.Z_sol * dot_m_cgm_in # metals from infall (assuming IGM metallicity)
+            - cgm_metallicity * dot_m_cgm_cold_falling # metals lost from CGM due to cold falling
+            - cgm_metallicity * dot_m_cgm_out # metals lost from CGM due to pressurization
+            + ism_metallicity * self.eta_m * dot_m_sfr # metals from ISM lifting
         )
         dot_m_metal_ism = (
-            cgm_metallicity * dot_m_cgm_cold_falling
-            + self.metal_yield * dot_m_sfr
-            - self.metal_yield * self.eta_z * dot_m_sfr
+            (1 - self.eta_z) * self.metal_yield * dot_m_sfr+ cgm_metallicity* dot_m_cgm_cold_falling
         )
+        # print(dot_m_metal_ism, dot_m_sfr, cgm_metallicity, dot_m_cgm_cold_falling, m_cgm_cold)
+        # print("falling_into_ism", falling_into_ism, "dot_m_cgm_cold_falling", dot_m_cgm_cold_falling, "dot_m_cgm_hot_cooling", dot_m_cgm_hot_cooling, "dot_m_cgm_cold", dot_m_cgm_cold, "m_cgm_cold", m_cgm_cold)
+        
+        
         # safety guards for low CGM masses
-        if (m_cgm_hot < 5e3) and (dot_m_cgm_hot < 0):
-            dot_m_cgm_hot *= max((m_cgm_hot - 5e3) / 5e3, 0.0)
+        # for hot CGM: suppress negative derivatives when mass is low AND handle negative masses
+        floor_m_cgm = 1e3
+        if (m_cgm_hot < floor_m_cgm) and (dot_m_cgm_hot < 0):
+            old_dot_m_cgm_hot = dot_m_cgm_hot
+            # suppress negative derivatives when mass is low
+            dot_m_cgm_hot *= max((m_cgm_hot - floor_m_cgm) / floor_m_cgm, 0.0)
+            
+            # elif m_cgm_hot < 0:
+            #     # if mass went negative set to 0
+            #     dot_m_cgm_hot = 0 # max(dot_m_cgm_hot, abs(m_cgm_hot) * 0.1)
             warning_message = (
-                f"dot_m_cgm_hot={dot_m_cgm_hot:.3e} (m_cgm_hot={m_cgm_hot:.3e})"
+                f"dot_m_cgm_hot={old_dot_m_cgm_hot:.3e} (m_cgm_hot={m_cgm_hot:.3e})"
             )
-            # warnings.warn(
-            #     warning_message,
-            # )
-        if (m_cgm_cold < 5e3) and (dot_m_cgm_cold < 0):
-            dot_m_cgm_cold *= max((m_cgm_cold - 5e3) / 5e3, 0.0)
+            warnings.warn(
+                warning_message,
+            )
+        # for cold CGM: suppress negative derivatives AND handle negative masses
+        if (m_cgm_cold < floor_m_cgm) and (dot_m_cgm_cold < 0):
+            # if dot_m_cgm_cold < 0:
+            # suppress negative derivatives when mass is low
+            
+            old_dot_m_cgm_cold = dot_m_cgm_cold
+            
+            dot_m_cgm_cold *= max((m_cgm_cold - floor_m_cgm) / floor_m_cgm, 0.0)
+                
+            # elif m_cgm_cold < 0:
+            #     # if mass went negative, force derivative to recover (restore mass slowly)
+            #     dot_m_cgm_cold = 0 # max(dot_m_cgm_cold, abs(m_cgm_cold) * 0.1)
             warning_message = (
-                f"dot_m_cgm_cold={dot_m_cgm_cold:.3e} (m_cgm_cold={m_cgm_cold:.3e})"
+                f"dot_m_cgm_cold={old_dot_m_cgm_cold:.3e} (m_cgm_cold={m_cgm_cold:.3e})"
             )
-            # warnings.warn(
-            #     warning_message,
-            # )
+            warnings.warn(
+                warning_message,
+            )
+            
+        # safety guards for low CGM and ism metallicities
+        # Zsun_min = self.Z_IGM * self.Z_sol
+        # cgm_min_metal_mass = Zsun_min * m_cgm#m_cgm_safe
+        # ism_min_metal_mass = Zsun_min * m_ism#m_ism_safe
+        # if (m_metals_cgm < cgm_min_metal_mass) and (dot_m_metal_cgm < 0):
+        #     dot_m_metal_cgm *= max((m_metals_cgm - cgm_min_metal_mass) / cgm_min_metal_mass, 0.0)
+        #     warning_message = (
+        #         f"dot_m_metal_cgm={dot_m_metal_cgm:.3e} (cgm_min_metal_mass={cgm_min_metal_mass:.3e})"
+        #     )
+        #     warnings.warn(
+        #         warning_message,
+        #     )
+        # if (m_metals_ism < ism_min_metal_mass) and (dot_m_metal_ism < 0):
+        #     dot_m_metal_ism *= max((m_metals_ism - ism_min_metal_mass) / ism_min_metal_mass, 0.0)
+        #     warning_message = (
+        #         f"dot_m_metal_ism={dot_m_metal_ism:.3e} (ism_min_metal_mass={ism_min_metal_mass:.3e})"
+        #     )
+        #     warnings.warn(
+        #         warning_message,
+        #     )
 
         halo_sfe = m_star / (m_halo * self.fb) if (m_halo * self.fb) > 0 else 0.0
 
@@ -1480,10 +1590,6 @@ class CGMRegulator:
                     float(dot_m_metal_cgm),  # Msun / Gyr
                     float(dot_m_metal_ism),  # Msun / Gyr
                     float(dot_m_halo),  # Msun / Gyr
-                    float(dot_e_ism_wind_erg_per_Gyr),  # erg / Gyr
-                    float(dot_e_cgm_cooling_erg_per_Gyr),  # erg / Gyr
-                    float(dot_e_cgm_out_erg_per_Gyr),  # erg / Gyr
-                    float(dot_e_cgm_in_erg_per_Gyr),  # erg / Gyr
                     float(dot_e_cgm),  # erg / Gyr
                     # dot_m_bh.value,
                     # dot_e_bh_thermfeedback.value,
@@ -1541,7 +1647,8 @@ class CGMRegulator:
             mhalo_t0 = initial_mhalo_dekel(self.mhalo_z0, self.time_interval)
 
         # mhalo_t0 = self.mhalo_init.value
-        rvir = virial_radius(z=self.zfinal, mhalo=mhalo_t0 * u.solMass).to(u.kpc)
+        # Consistency fix: initialize virial quantities at the start redshift, not zfinal.
+        rvir = virial_radius(z=self.zinit, mhalo=mhalo_t0 * u.solMass).to(u.kpc)
         tvir = virial_T(mhalo_t0 * u.solMass, rvir).to(u.K)
 
         print(
@@ -1549,11 +1656,11 @@ class CGMRegulator:
                 self.time_interval[0], mhalo_t0
             )
         )
-        mass_ism_gas_0 = 1e3
-        mass_star_0 = 1e3
+        mass_ism_gas_0 = 1e4
+        mass_star_0 = 1e4
         mass_bulge_0 = mass_star_0  #
-        mass_cgm_hot_0 = 1e3
-        mass_cgm_cold_0 = 1e3
+        mass_cgm_hot_0 = 1e4
+        mass_cgm_cold_0 = 1e4
         mass_cgm_0 = mass_cgm_hot_0 + mass_cgm_cold_0
         initial_cgm_metal_zsun = 0.001
         # get the corresponding metal mass
@@ -1567,13 +1674,15 @@ class CGMRegulator:
         e_cgm_in_0 = 1e3 * u.erg
 
         e_bh_feedback_0 = 0.0 * u.erg
-        
+
         # initial ISM metal mass
         initial_ism_metal_zsun = 0.001
         mass_ism_metals_0 = mass_ism_gas_0 * initial_ism_metal_zsun * self.Z_sol
-        
-        # initial 
-        
+
+        # initial
+
+        # State-vector refactor: only evolve the physically coupled variables.
+        # Diagnostic cumulative energy channels are reconstructed after integration.
         # initial conditions masses and energ
         initial_values = np.array(
             [
@@ -1585,59 +1694,91 @@ class CGMRegulator:
                 mass_cgm_metals_0,
                 mass_ism_metals_0,
                 mhalo_t0,
-                e_ism_wind_0.value,
-                e_cgm_cooling_0.value,
-                e_cgm_out_0.value,
-                e_cgm_in_0.value,
                 e_cgm_0.value,
                 # self.mbh_seed.value,
                 # e_bh_feedback_0.value,
             ]
         )
-        print(
-            "> initial values ISM  = {:.2e} Msol \t Stellar mass = {:.2e} Msol\tBulge stellar mass = {:.2e} Msol\tCGM hot mass = {:.2e} Msol\tCGM cold mass = {:.2e} Msol\tCGM Metal mass = {:.2e} Msol\tCGM metallicity = {:.4f} (Zsun)\tHalo mass = {:.2e} Msol\tISM wind energy = {:.2e} erg\tCGM cooling energy = {:.2e} erg\tCGM out energy = {:.2e} erg\tCGM in energy = {:.2e} erg\tCGM energy = {:.2e} erg\tISM Metal mass = {:.2e} Msol\tISM metallicity = {:.4f} (Zsun)".format(
-                initial_values[0],
-                initial_values[1],
-                initial_values[2],
-                initial_values[3],
-                initial_values[4],
-                initial_values[5],
-                (initial_values[5] / mass_cgm_0) / self.Z_sol,
-                initial_values[6],
-                initial_values[7],
-                initial_values[8],
-                initial_values[9],
-                initial_values[10],
-                initial_values[11],
-                initial_values[12],
-                (initial_values[12] / mass_ism_gas_0) / self.Z_sol,
-            )
-        )
+        print("> initial values")
+        initial_rows = [
+            ("ISM", f"{initial_values[0]:.2e} Msol"),
+            ("Stellar mass", f"{initial_values[1]:.2e} Msol"),
+            ("Bulge stellar mass", f"{initial_values[2]:.2e} Msol"),
+            ("CGM hot mass", f"{initial_values[3]:.2e} Msol"),
+            ("CGM cold mass", f"{initial_values[4]:.2e} Msol"),
+            ("CGM Metal mass", f"{initial_values[5]:.2e} Msol"),
+            ("CGM metallicity", f"{(initial_values[5] / mass_cgm_0) / self.Z_sol:.4f} (Zsun)"),
+            ("Halo mass", f"{initial_values[7]:.2e} Msol"),
+            ("ISM wind energy", f"{e_ism_wind_0.value:.2e} erg"),
+            ("CGM cooling energy", f"{e_cgm_cooling_0.value:.2e} erg"),
+            ("CGM out energy", f"{e_cgm_out_0.value:.2e} erg"),
+            ("CGM in energy", f"{e_cgm_in_0.value:.2e} erg"),
+            ("CGM energy", f"{initial_values[8]:.2e} erg"),
+            ("ISM Metal mass", f"{initial_values[6]:.2e} Msol"),
+            ("ISM metallicity", f"{(initial_values[6] / mass_ism_gas_0) / self.Z_sol:.4f} (Zsun)"),
+        ]
+        half = (len(initial_rows) + 1) // 2
+        left_rows = initial_rows[:half]
+        right_rows = initial_rows[half:]
+        for i in range(half):
+            left_txt = f"{left_rows[i][0]} = {left_rows[i][1]}"
+            right_txt = ""
+            if i < len(right_rows):
+                right_txt = f"{right_rows[i][0]} = {right_rows[i][1]}"
+            print(f"    {left_txt:<56} {right_txt}")
 
         t0 = time.perf_counter()
         print(f"Starting ODE solver (perf_counter={t0:.6f})")
 
-        if self.tstep != 1:  # custom timesteping
-            t = self.evaluation_time_array
+        # If tstep != 1, return solution sampled at a user-specified cadence.
+        # Otherwise, let the solver choose adaptive output times.
+        # Set component-wise absolute tolerances to match the scale of each variable.
+        # Default atol=1e-6 is catastrophically mismatched when masses (~1e4 Msun) and
+        # energies (~1e48 erg) share the same state vector: BDF's Jacobian finite-difference
+        # perturbations become meaningless, Newton's method diverges, and steps collapse.
+        
+        atol_mass   = max(1e2, 1e-2 * mass_ism_gas_0)   # ~100 Msun
+        atol_energy = max(1e36, 1e-4 * e_cgm_0.value)   # keyed to CGM energy scale
+        atol = np.array([
+            atol_mass,   # [0] m_ism
+            atol_mass,   # [1] m_star
+            atol_mass,   # [2] m_bulge
+            atol_mass,   # [3] m_cgm_hot
+            atol_mass,   # [4] m_cgm_cold
+            1e-3,        # [5] m_metals_cgm
+            1e-3,        # [6] m_metals_ism
+            1e4,         # [7] m_halo
+            atol_energy, # [8] e_cgm
+        ])
+        # solver update: Radau is more robust than BDF or rk45
+        # transitions in this RHS; a small first_step resolves the startup transient.
+        if self.tstep != 1:
+            if self.tstep <= 0:
+                raise ValueError(f"tstep must be > 0 when using fixed output cadence. Got {self.tstep}.")
             solution = solve_ivp(
                 self.mass_evolution,
                 self.time_interval,
                 initial_values,
-                # method="RK45",
-                # rtol=1e-5,
-                t_eval=t,
+                method="Radau",
+                t_eval=self.evaluation_time_array,
+                atol=atol,
+                rtol=1e-3,
+                first_step=1e-6,
             )
-        else:  # automatic timesteping
+        else:
             solution = solve_ivp(
                 self.mass_evolution,
                 self.time_interval,
                 initial_values,
-                # rtol=1e-5,
+                method="Radau",
+                atol=atol,
+                rtol=1e-3,
+                first_step=1e-6,
             )
 
         elapsed = time.perf_counter() - t0
         print(
-            f"ODE solver finished in {elapsed:.3f} s (status={getattr(solution, 'status', None)}, nfev={getattr(solution, 'nfev', None)})"
+            f"ODE solver finished in {elapsed:.3f} s (status={getattr(solution, 'status', None)}, success={getattr(solution, 'success', None)}, nfev={getattr(solution, 'nfev', None)})"
         )
 
         adaptive_tsteps = solution.t
@@ -1653,13 +1794,43 @@ class CGMRegulator:
         mmetals_cgm_t = solution.y[5]
         mmetals_ism_t = solution.y[6]
         mhalo_t = solution.y[7]
-    
-        egy_t = solution.y[8]  # energy gained from energy-loaded galactic winds
-        egy_radloss_t = solution.y[9]  # energy lost due to cooling
-        egy_eject_t = solution.y[10]  # energy ejected from the CGM
-        egy_cgm_in_t = solution.y[11]  # energy accreted from the IGM
-        egy_cgm_t = solution.y[12]  # total cgm energy
-    
+
+        egy_cgm_t = solution.y[8]  # total cgm energy
+
+        # Rebuild diagnostic cumulative energies from instantaneous rates along
+        # the solved trajectory (instead of integrating them as ODE state vars).
+        derived_quantities = []
+        for i, time_now in enumerate(adaptive_tsteps):
+            state_now = np.array(
+                [
+                    mgas_t[i],
+                    mstar_t[i],
+                    mass_bulge_t[i],
+                    mcgm_hot_t[i],
+                    mcgm_cold_t[i],
+                    mmetals_cgm_t[i],
+                    mmetals_ism_t[i],
+                    mhalo_t[i],
+                    egy_cgm_t[i],
+                ]
+            )
+            derived_quantities.append(
+                self.mass_evolution(time_now, state_now, ode_mode=False)
+            )
+        derived_quantities = np.array(derived_quantities)
+
+        egy_t = e_ism_wind_0.value + scipy.integrate.cumulative_trapezoid(
+            derived_quantities[:, 4], adaptive_tsteps, initial=0.0
+        )
+        egy_radloss_t = e_cgm_cooling_0.value + scipy.integrate.cumulative_trapezoid(
+            derived_quantities[:, 2], adaptive_tsteps, initial=0.0
+        )
+        egy_eject_t = e_cgm_out_0.value + scipy.integrate.cumulative_trapezoid(
+            derived_quantities[:, 1], adaptive_tsteps, initial=0.0
+        )
+        egy_cgm_in_t = e_cgm_in_0.value + scipy.integrate.cumulative_trapezoid(
+            derived_quantities[:, 3], adaptive_tsteps, initial=0.0
+        )
 
         metal_cgm_mass = mmetals_cgm_t / mcgm_t  # CGM metallicity ratio
         metal_cgm_mass_sol = metal_cgm_mass / self.Z_sol
@@ -1670,24 +1841,21 @@ class CGMRegulator:
         # mbh = solution.y[12]
         # e_bh = solution.y[13]
 
-        # CGM metallicity ratio in solar units
         # diagnose the solution status
+        print(f"*** Solution success: {solution.success}")
+        print(f"**** message: {solution.message}")
         print(
-            "*** Solution status: {} (0: succes, -1: step failed, 1: termination )".format(
-                solution.status
-            )
-        ),
-        # print("Number of function evaluations: ", solution.nfev)
-
+            f"**** Last solved time: {adaptive_tsteps[-1]:.6f} Gyr (target end: {self.time_interval[1]:.6f} Gyr)"
+        )
         # the final values
         print(
-            f"Final halo mass = {mhalo_t[-1]:.2e} Msol\t"
-            f"Initial halo mass = {mhalo_t[0]:.2e} Msol\t"
-            f"Final stellar mass = {mstar_t[-1]:.2e} Msol\t"
-            f"Peak halo scale efficiency = {np.max(mstar_t / (mhalo_t * self.fb)):.2e}\t"
-            f"Final CGM mass = {mcgm_t[-1]:.2e} Msol\t"
-            f"Final CGM metallicity = {metal_cgm_mass_sol[-1]:.2e}\t"
-            f"Final CGM energy = {egy_cgm_t[-1]:.2e} erg"
+            f"Final halo mass = {mhalo_t[-1]:.2e} Msol\n"
+            f"+ Initial halo mass = {mhalo_t[0]:.2e} Msol\n"
+            f"+ Final stellar mass = {mstar_t[-1]:.2e} Msol\n"
+            f"+ Peak halo scale efficiency = {np.max(mstar_t / (mhalo_t * self.fb)):.2e}\n"
+            f"+ Final CGM mass = {mcgm_t[-1]:.2e} Msol\n"
+            f"+ Final CGM metallicity = {metal_cgm_mass_sol[-1]:.2e}\n"
+            f"+ Final CGM energy = {egy_cgm_t[-1]:.2e} erg"
         )
 
         # fill the ode_results with the results
@@ -1711,6 +1879,11 @@ class CGMRegulator:
         self.ode_results["metal_cgm_mass_sol"] = metal_cgm_mass_sol
         self.ode_results["metal_ism_mass"] = metal_ism_mass
         self.ode_results["metal_ism_mass_sol"] = metal_ism_mass_sol
+        self.ode_results["solver_status"] = solution.status
+        self.ode_results["solver_success"] = solution.success
+        self.ode_results["solver_message"] = solution.message
+        self.ode_results["solver_nfev"] = solution.nfev
+        self.ode_results["solver_t_end"] = adaptive_tsteps[-1]
         # self.ode_results["m_bh"] = mbh
         # self.ode_results["egy_bh"] = e_bh
 
@@ -1724,7 +1897,7 @@ class CGMRegulator:
         """get either some of the derived quantities or derivatives
 
         Returns:
-            _type_: _description_
+            dict: A dictionary containing the derived quantities or derivatives.
         """
 
         # the differnce between this and the one above is that this is dynamically updated, while the resulsta are from IVP
@@ -1760,7 +1933,8 @@ class CGMRegulator:
             )
 
         derived_quantities = np.array(derived_quantities)
-        return {
+        # fmt: off
+        return { 
             "sim_time": t,
             "z": cosmology.z_at_value(LCDM.age, np.array(t) * u.Gyr),
             "halo_vir_temp": derived_quantities[:, 0],
@@ -1769,12 +1943,8 @@ class CGMRegulator:
             "dot_e_cgm_in": derived_quantities[:, 3],
             "dot_e_ism_wind": derived_quantities[:, 4],
             "dot_m_cgm_out": derived_quantities[:, 5],
-            "dot_m_cgm_hot": derived_quantities[
-                :, 6
-            ],  # hot bucket that feeds the cold buckets
-            "dot_m_cgm_cold": derived_quantities[
-                :, 7
-            ],  # cold bucket that feeds the ISM
+            "dot_m_cgm_hot": derived_quantities[:, 6],  # hot bucket that feeds the cold buckets
+            "dot_m_cgm_cold": derived_quantities[:, 7], # cold bucket that feeds the ISM 
             "dot_m_cgm_in": derived_quantities[:, 8],
             "dot_m_ism_wind": derived_quantities[:, 9],
             "f_prevent": derived_quantities[:, 10],
@@ -1799,8 +1969,199 @@ class CGMRegulator:
             # "m_star_in_bh_disk": derived_quantities[:, 23],
             # "effective_bulge_mass": derived_quantities[:, 24],
         }
+        # fmt: on
+    def _state_vector_for_stiffness(self, idx):
+        """Build the 9D dynamical state vector used by the current ODE solve."""
+        return np.array(
+            [
+                self.ode_results["m_ism"][idx],
+                self.ode_results["m_star"][idx],
+                self.ode_results["m_bulge"][idx],
+                self.ode_results["m_cgm_hot"][idx],
+                self.ode_results["m_cgm_cold"][idx],
+                self.ode_results["m_metals_cgm"][idx],
+                self.ode_results["m_metals_ism"][idx],
+                self.ode_results["m_halo"][idx],
+                self.ode_results["egy_cgm"][idx],
+            ],
+            dtype=float,
+        )
 
+    def _stiffness_state_labels(self):
+        """Labels for the current 9D dynamical state vector."""
+        return [
+            "m_ism",
+            "m_star",
+            "m_bulge",
+            "m_cgm_hot",
+            "m_cgm_cold",
+            "m_metals_cgm",
+            "m_metals_ism",
+            "m_halo",
+            "egy_cgm",
+        ]
 
+    def estimate_local_stiffness(
+        self,
+        t,
+        state,
+        eps_rel=1e-6,
+        eps_abs=1e-10,
+        include_mode_sources=False,
+        top_n=3,
+    ):
+        """Estimate local stiffness from a finite-difference Jacobian.
+
+        Returns a dictionary with Jacobian eigenvalues and summary metrics.
+        """
+        y = np.asarray(state, dtype=float)
+        f0 = np.asarray(self.mass_evolution(float(t), y, ode_mode=True), dtype=float)
+        n = y.size
+        J = np.zeros((n, n), dtype=float)
+
+        # Central differences for a more stable Jacobian estimate.
+        for j in range(n):
+            h = eps_abs + eps_rel * max(abs(y[j]), 1.0)
+            y_plus = y.copy()
+            y_minus = y.copy()
+            y_plus[j] += h
+            y_minus[j] -= h
+            f_plus = np.asarray(
+                self.mass_evolution(float(t), y_plus, ode_mode=True), dtype=float
+            )
+            f_minus = np.asarray(
+                self.mass_evolution(float(t), y_minus, ode_mode=True), dtype=float
+            )
+            J[:, j] = (f_plus - f_minus) / (2.0 * h)
+
+        eigvals, eigvecs = np.linalg.eig(J)
+        real_parts = np.real(eigvals)
+
+        abs_real = np.abs(real_parts)
+        nz_mask = abs_real > 0
+        max_abs_real = float(abs_real.max()) if abs_real.size > 0 else 0.0
+        min_nz_abs_real = (
+            float(abs_real[nz_mask].min()) if np.any(nz_mask) else np.nan
+        )
+
+        # A large spread in |Re(lambda)| indicates multiple disparate timescales.
+        if np.isfinite(min_nz_abs_real) and min_nz_abs_real > 0:
+            stiffness_ratio = max_abs_real / min_nz_abs_real
+        else:
+            stiffness_ratio = np.inf
+
+        fastest_timescale_gyr = (
+            1.0 / max_abs_real if np.isfinite(max_abs_real) and max_abs_real > 0 else np.inf
+        )
+
+        result = {
+            "eigvals": eigvals,
+            "max_abs_real_eig": max_abs_real,
+            "min_nonzero_abs_real_eig": min_nz_abs_real,
+            "stiffness_ratio": float(stiffness_ratio),
+            "fastest_timescale_gyr": float(fastest_timescale_gyr),
+            "f_norm": float(np.linalg.norm(f0)),
+            "jacobian": J,
+        }
+
+        if include_mode_sources:
+            labels = self._stiffness_state_labels()
+            stiff_idx = int(np.argmax(abs_real)) if abs_real.size > 0 else 0
+            stiff_eigval = eigvals[stiff_idx]
+            stiff_eigvec = eigvecs[:, stiff_idx]
+            weights = np.abs(stiff_eigvec)
+            if np.sum(weights) > 0:
+                weights = weights / np.sum(weights)
+
+            order = np.argsort(weights)[::-1][: max(1, min(int(top_n), len(weights)))]
+            dominant_variables = [
+                {
+                    "name": labels[i],
+                    "weight": float(weights[i]),
+                }
+                for i in order
+            ]
+
+            result.update(
+                {
+                    "stiff_mode_eigval": stiff_eigval,
+                    "stiff_mode_index": stiff_idx,
+                    "dominant_variables": dominant_variables,
+                }
+            )
+
+        return result
+
+    def quantify_stiffness(
+        self,
+        n_samples=6,
+        eps_rel=1e-6,
+        eps_abs=1e-10,
+        include_mode_sources=False,
+        top_n=3,
+    ):
+        """Quantify stiffness along the solved trajectory.
+
+        Args:
+            n_samples (int): Number of time samples along the trajectory.
+            eps_rel (float): Relative finite-difference step size.
+            eps_abs (float): Absolute finite-difference floor.
+            include_mode_sources (bool): If True, identify which state variables
+                dominate the stiffest local mode.
+            top_n (int): Number of dominant variables to report per sample.
+
+        Returns:
+            dict: Summary and per-sample stiffness metrics.
+        """
+        if "t" not in self.ode_results or len(self.ode_results["t"]) == 0:
+            raise ValueError("No ODE results found. Run run_halo() first.")
+
+        t = np.asarray(self.ode_results["t"], dtype=float)
+        n_samples = max(1, min(int(n_samples), len(t)))
+        sample_idx = np.unique(np.linspace(0, len(t) - 1, n_samples, dtype=int))
+
+        per_sample = []
+        for idx in sample_idx:
+            state = self._state_vector_for_stiffness(idx)
+            local = self.estimate_local_stiffness(
+                t[idx],
+                state,
+                eps_rel=eps_rel,
+                eps_abs=eps_abs,
+                include_mode_sources=include_mode_sources,
+                top_n=top_n,
+            )
+            sample_result = {
+                "idx": int(idx),
+                "t_gyr": float(t[idx]),
+                "z": float(cosmology.z_at_value(LCDM.age, t[idx] * u.Gyr)),
+                "stiffness_ratio": local["stiffness_ratio"],
+                "max_abs_real_eig": local["max_abs_real_eig"],
+                "min_nonzero_abs_real_eig": local["min_nonzero_abs_real_eig"],
+                "fastest_timescale_gyr": local["fastest_timescale_gyr"],
+                "f_norm": local["f_norm"],
+            }
+            if include_mode_sources:
+                sample_result["stiff_mode_eigval"] = local["stiff_mode_eigval"]
+                sample_result["dominant_variables"] = local["dominant_variables"]
+            per_sample.append(sample_result)
+
+        ratios = np.array([x["stiffness_ratio"] for x in per_sample], dtype=float)
+        finite_ratios = ratios[np.isfinite(ratios)]
+        summary = {
+            "n_samples": int(len(per_sample)),
+            "max_stiffness_ratio": (
+                float(np.max(finite_ratios)) if finite_ratios.size > 0 else np.inf
+            ),
+            "median_stiffness_ratio": (
+                float(np.median(finite_ratios)) if finite_ratios.size > 0 else np.inf
+            ),
+            "samples": per_sample,
+        }
+        return summary
+
+####### end of the HaloODE class definition
+ 
 def plot_halo_profile(results, derived_quant):
     t = derived_quant["sim_time"]
     tvir = derived_quant["tvir"]

@@ -21,7 +21,7 @@ from cgm_sf_regulator import CGMRegulator
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 plt.rcParams.update(
     {
-        # "text.usetex": True,
+        "text.usetex": True,
         # "font.family": "Helvetica",
         "font.family": "serif",
         "mathtext.fontset": "cm",
@@ -32,10 +32,10 @@ plt.rcParams.update(
         "ytick.direction": "in",
         "ytick.right": True,
         "xtick.top": True,
-        "xtick.major.size": 5,
-        "ytick.major.size": 5,
-        "xtick.minor.size": 4,
-        "ytick.minor.size": 4,
+        "xtick.major.size": 6,
+        "ytick.major.size": 6,
+        "xtick.minor.size": 3,
+        "ytick.minor.size": 3,
         "xtick.minor.visible": True,
         "ytick.minor.visible": True,
     }
@@ -248,6 +248,9 @@ for j, n_sfr in enumerate(n_sfrs):
             color=colors[i],
             lw=3
         )
+        
+       
+        
         ax[1].scatter(
             mstar[i][mask], sfr_yr[mask], s=30, color=colors[i], edgecolor="k", zorder=3
         )
@@ -476,7 +479,7 @@ for j, n_sfr in enumerate(n_sfrs):
         ls="-.",
         color="darkorange",
         zorder=0,
-        label=r"${\rm SFMS~ Renzini ~& ~Peng ~2015}$",
+        label=r"SFMS (Renzini \& Peng 2015)"
     )
 
 
@@ -508,8 +511,8 @@ for j, n_sfr in enumerate(n_sfrs):
         color="k",
         zorder=0,
         label=r"${\rm SFMS~}$"
-        + r"$~0.01 < z < 0.05$"
-        + r"${~\rm Saintonge ~& ~Catinella ~2022}$",
+        + r"$z = 0.01 - 0.05$"
+        + "(Saintonge \& Catinella 2022)"
     )
 
     # add 0.4 dex scatter region
@@ -601,7 +604,7 @@ for j, n_sfr in enumerate(n_sfrs):
             linestyle="none",
             alpha=0.5,
             label=r"$\rm{xGASS}~$"
-            + r"$0.01 < z < 0.05$"
+            + r"$z = 0.01 - 0.05$"
             + r"$\rm{~Catinella ~et ~al. ~2018}$",
         ),
         Line2D(
@@ -616,7 +619,7 @@ for j, n_sfr in enumerate(n_sfrs):
             alpha=0.5,
             label=r"$\rm{gas-rich~dwarfs}~$"
             + r"$z\sim0$"
-            + r"$\rm{~ Mancera ~Piña ~et ~al. ~2025 }$",
+            + r"$\rm{~ Mancera ~Pina ~et ~al. ~2025 }$",
         ),
     ]
     ax[0].legend(
@@ -699,7 +702,7 @@ for j, n_sfr in enumerate(n_sfrs):
     inset_ax_3.legend(frameon=False)
  
     # plt.savefig(
-    #     f"./figures/KS98scan_nkappa_variation/{j:02d}_ism_gas_fractions_{param_txt}.png",
+    #     f"./final_figs/KS98scan_nkappa_variation/{j:02d}_ism_gas_fractions_{param_txt}.pdf",
     #     dpi=200,
     #     bbox_inches="tight",
     #     pad_inches=0.05,
@@ -718,14 +721,21 @@ print(mhalos[0])
 n_sfr = 1.8
 r_disk_sfr = 0.018
 kappa_sfr = 0.02
-
+eta_Z = 0.70
+alpha_E = 0.1
+alpha_M = 0.1
 param_txt = (
-    f"KS_1998_kappa{str(kappa_sfr).replace('.', 'p')}_"
+    f"KS_1998_kappa_updated_{str(kappa_sfr).replace('.', 'p')}_"
     + f"n{str(n_sfr).replace('.', 'p')}_"
-    + f"r{str(r_disk_sfr).replace('.', 'p')}"
+    + f"r{str(r_disk_sfr).replace('.', 'p')}_"
+    + f"etaZ{str(eta_Z).replace('.', 'p')}_"
+    + f"alphaE{str(alpha_E).replace('.', 'p')}_"
+    + f"alphaM{str(alpha_M).replace('.', 'p')}"
 )
-file = "./runs/smhm_2phase_redshift_scan_" f"{param_txt}.h5"
 
+
+file = "./runs/redshift_scan_" f"{param_txt}.h5"
+file="./runs/smhm_2phase_redshift_scan_redshift_scan_KS_1998_16bins_Radau_0p02_n1p8_r0p018_etaZ0p7.h5"
 ####
 
 if not os.path.exists(file):
@@ -737,6 +747,9 @@ if not os.path.exists(file):
         disk_scale_length=r_disk_sfr,
         KS_n=n_sfr,
         KS_kappa_s=kappa_sfr,
+        eta_z=eta_Z,
+        alpha_e=alpha_E,
+        alpha_m=alpha_M,
         # add_f_prevent_floor=1e-6
     )
 
@@ -748,7 +761,10 @@ mstar = f["Mstar_obs"]
 mism = f["MISM_obs"]
 zs = f["redshifts"][:]
 sfr = f["SFR_obs"]
-mmetal_cgm = f["MMetals_obs"]
+mmetal_cgm = f["MMetals_cgm_obs"]
+mmetal_ism = f["MMetals_ism_obs"]
+
+
 rvirs = virial_radius(zs, mhalo_obs * u.Msun)  # virial radius in kpc
 halo_Tvirs = virial_T(mhalo_obs * u.Msun, rvirs)  # virial temperature in K
 print(f.keys())
@@ -814,7 +830,7 @@ labelLine(
 )
 labelLines(
     lines[1:],
-    xvals=np.geomspace(1e9, 1e12, len(lines) - 1),
+    xvals=np.geomspace(2e9, 1e12, len(lines) - 1),
     yoffsets=0.01,
     align=False,
     fontsize=7,
@@ -1070,7 +1086,7 @@ ax[1].plot(
     ls="-.",
     color="darkorange",
     zorder=0,
-    label=r"${\rm SFMS~ (Renzini ~& ~Peng ~2015)}$",
+    label=r"$z = 0.02 - 0.085$ ({\rm Renzini \& Peng 2015})",
 )
 
 
@@ -1101,9 +1117,7 @@ ax[1].plot(
     ls="--",
     color="k",
     zorder=0,
-    label=r"${\rm SFMS~}$"
-    + r"$~0.01 < z < 0.05$"
-    + r"${~\rm (Saintonge ~& ~Catinella ~2022)}$",
+    label=r"$z = 0.01 - 0.05$ " + r"(Saintonge \& Catinella 2022)"
 )
 
 # add 0.4 dex scatter region
@@ -1195,7 +1209,7 @@ custom_legend_elements = [
         linestyle="none",
         alpha=0.5,
         label=r"$\rm{xGASS}~$"
-        + r"$0.01 < z < 0.05$"
+        + r"$z = 0.01 - 0.05$"
         + r"$\rm{~(Catinella ~et ~al. ~2018)}$",
     ),
     Line2D(
@@ -1208,16 +1222,16 @@ custom_legend_elements = [
         markeredgecolor="brown",
         linestyle="none",
         alpha=0.5,
-        label=r"$\rm{gas-rich~dwarfs}~$"
-        + r"$z\sim0$"
-        + r"$\rm{~ (Mancera ~Piña ~et ~al. ~2025)}$",
+        label=r"gas-rich dwarfs "
+        + r"$z\sim0$ "
+        + r"(Mancera Pina et al. 2025)",
     ),
 ]
 ax[0].legend(
-    handles=custom_legend_elements, loc="upper right", frameon=False, fontsize=8.5
+    handles=custom_legend_elements, loc="upper right", frameon=True, fontsize=8.5, edgecolor="none"
 )
 
-ax[1].legend(frameon=False, fontsize=9, loc="lower right")
+ax[1].legend(frameon=False, fontsize=9, loc="lower right", title="SFMS", title_fontsize=9)
 
 
 # ax[0].legend(
@@ -1235,13 +1249,11 @@ ax[0].set(
 ax[1].set(
     xscale="log",
     yscale="log",
-    xlabel=r"$\rm M_\star [M_\odot]$",
+    xlabel=r"$ M_\star [{\rm M_\odot}]$",
     ylabel=r"${\rm SFR ~[M_\odot ~yr^{-1}]}$",
     xlim=(8e6, 8e11),
     ylim=(2e-4, 9),
 )
-
-
 # add text for the KS parameters used
 # ax[0].set_title(
 #     rf"KS 1998: $\kappa={kappa_sfr:.4f}$, $n={n_sfr:.4f}$, $r_{{\rm disk}}={r_disk_sfr:.4f} R_{{\rm vir}}$",
@@ -1250,47 +1262,275 @@ ax[1].set(
 # )
 
 plt.savefig(
-    f"./figures/ism_gas_fractions_{param_txt}.png",
+    f"./final_figs/fig_10_ism_gas_fractions_{param_txt}.pdf",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.01,
 )
+
 plt.show()
 # %% metallicity plot
+twelve_log_oh_sun = 8.69
+def Zsun_to_twelve_log_oh(Zsun):
+    zsun = 0.013
+    twelve_log_oh = twelve_log_oh_sun + np.log10(Zsun)
+    return twelve_log_oh
 
-z_sun = 0.0134
-fig2, ax2 = plt.subplots(figsize=(4.5, 3.5), dpi=300)
+z_sun = 0.013
+fig2, ax2 = plt.subplots(figsize=(4.5, 4), dpi=300)
+
 for i, z in enumerate(zs):
-    metallicity = (mmetal_cgm[i] / mism[i]) / z_sun
-    ax2.plot(
-        mhalo_obs[i],
-        metallicity,
-        label=f"{z:.1f}",
-        marker="o",
+    metallicity = (mmetal_ism[i] / mism[i]) 
+    metallicity_zsun =  metallicity / z_sun
+    twelv_log_oh = Zsun_to_twelve_log_oh(metallicity_zsun)
+    # ax2.plot(
+    #     mstar[i],
+    #     np.log10(metallicity_zsun),
+    #     label=f"{z:.1f}",
+    #     marker="o",
+    #     color=colors[i],
+    #     markeredgecolor="k",
+    # )
+    
+     # at the end of each line put a text label with the redshift
+
+       
+        
+    x_pos = np.log10(mstar[i][-1]) + 0.1  # slightly to the right of the last point
+    y_pos = twelv_log_oh[-1]
+    
+    if z ==0.35:
+       x_pos = 10.4
+       y_pos = 8.85
+    if z == 0.01:
+        x_pos = 9.7
+        y_pos = 8.8
+        
+    ax2.text(
+        x_pos,
+        y_pos   ,
+        f"{z:.1f}",
+        fontsize=9,
         color=colors[i],
-        markeredgecolor="k",
+        va="center",
+        ha="left",
     )
+    
+    # Separate data for Tvir < 1e6 and Tvir >= 1e6
+    Tvirs = halo_Tvirs[i].value
+    mask_solid = Tvirs < 1e6
+    mask_dotted = Tvirs >= 1e6
+    
+    # Plot solid line for Tvir < 1e6
+    ax2.plot(
+        np.log10(mstar[i][mask_solid]),
+        twelv_log_oh[mask_solid],
+        color=colors[i],
+        lw=3,
+        alpha=0.8
+    )
+    
+    # Plot dotted line for Tvir >= 1e6
+    ax2.plot(
+        np.log10(mstar[i][mask_dotted]),
+        twelv_log_oh[mask_dotted],
+        color=colors[i],
+        lw=3,
+        alpha=0.8,
+        linestyle=":"
+    )
+    
+    # Plot connecting dotted line between the two segments
+    if np.any(mask_solid) and np.any(mask_dotted):
+        last_solid_idx = np.where(mask_solid)[0][-1]
+        first_dotted_idx = np.where(mask_dotted)[0][0]
+        ax2.plot(
+            np.log10(mstar[i][[last_solid_idx, first_dotted_idx]]),
+            twelv_log_oh[[last_solid_idx, first_dotted_idx]],
+            color=colors[i],
+            lw=3,
+            alpha=0.8,
+            linestyle=":"
+        )
+   
+
+
+#==== add  observations 
+
+# https://ui.adsabs.harvard.edu/abs/2020MNRAS.491..944C/abstract
+curti_2020_metallicity = np.loadtxt("./data/curti+20_fig3.csv", delimiter=",")
+curti_mstar =  curti_2020_metallicity[:, 0]
+curti_12_log_oh = curti_2020_metallicity[:, 1]
+curti_lower_values = curti_2020_metallicity[:, 2]
+curti_upper_values = curti_2020_metallicity[:, 3]
+# calculate errors for errorbar
+curti_12_log_oh_err_lower = curti_12_log_oh - curti_lower_values
+curti_12_log_oh_err_upper = curti_upper_values - curti_12_log_oh
+
+# make the last three of the data point have empty centers and dotted errors as per the paper
+ax2.errorbar(
+    curti_mstar[:-3],
+    curti_12_log_oh[:-3],
+    yerr=[curti_12_log_oh_err_lower[:-3], curti_12_log_oh_err_upper[:-3]],
+    fmt="o",
+    color="k",
+    markersize=4,
+    alpha=1,
+    elinewidth=1,
+    zorder=1,
+     label=r"Curti et al. 2020, $z\sim 0$"
+)
+ax2.errorbar(
+    curti_mstar[-3:],
+    curti_12_log_oh[-3:],
+    yerr=[curti_12_log_oh_err_lower[-3:], curti_12_log_oh_err_upper[-3:]],
+    fmt="o",
+    color="k",
+    markerfacecolor="none",
+    markersize=4,
+    alpha=0.6,
+    elinewidth=1,
+    zorder=1,   
+)
 
 ax2.set(
-    xscale="log",
-    yscale="log",
-    xlabel=r"$M_\star$ [M$_\odot$]",
-    ylabel=r"CGM Metallicity [$Z_\odot$]",
+    # xscale="log",
+    # yscale="log",
+    xlabel=r"$\log M_\star$ [M$_\odot$]",
+    # ylabel=r"ISM Metallicity [$Z_\odot$]",
+    ylabel=r"ISM Metallicity [12 + log(O/H)] ",
+    xlim=(7.2,12.1),
+    ylim = (7.6, 8.9)
 )
+
+# sanders 2021, z~2.3 https://iopscience.iop.org/article/10.3847/1538-4357/abf4c1/pdf
+sandres_2021 = np.genfromtxt("./data/sanders+21_z2p3.txt", skip_header=2)
+sanders_log_mstar = sandres_2021[:, 0] 
+sanders_log_mstar_err_lower = sandres_2021[:, 1]
+sanders_log_mstar_err_upper = sandres_2021[:, 2]
+sanders_12_log_oh = sandres_2021[:, 3]
+sanders_12_log_oh_err_lower = sandres_2021[:, 4]
+sanders_12_log_oh_err_upper = sandres_2021[:, 5]
+ax2.errorbar(
+    sanders_log_mstar,
+    sanders_12_log_oh,
+    xerr=[sanders_log_mstar_err_lower, sanders_log_mstar_err_upper],
+    yerr=[sanders_12_log_oh_err_lower, sanders_12_log_oh_err_upper],
+    fmt="o",
+    color="tab:green",
+    label=r"Sanders et al. 2021, $z\sim 2.3$",
+    markersize=4,
+    alpha=1,
+    elinewidth=1,
+    zorder=1
+)
+# at 3.3
+sanders_2021_z3p3 = np.genfromtxt("./data/sanders+21_z3p3.txt", skip_header=2)
+sanders_z3p3_log_mstar = sanders_2021_z3p3[:, 0] 
+sanders_z3p3_log_mstar_err_lower = sanders_2021_z3p3[:, 1]
+sanders_z3p3_log_mstar_err_upper = sanders_2021_z3p3[:, 2]
+sanders_z3p3_12_log_oh = sanders_2021_z3p3[:, 3]
+sanders_z3p3_12_log_oh_err_lower = sanders_2021_z3p3[:, 4]
+sanders_z3p3_12_log_oh_err_upper = sanders_2021_z3p3[:, 5]
+ax2.errorbar(
+    sanders_z3p3_log_mstar,
+    sanders_z3p3_12_log_oh,
+    xerr=[sanders_z3p3_log_mstar_err_lower, sanders_z3p3_log_mstar_err_upper],
+    yerr=[sanders_z3p3_12_log_oh_err_lower, sanders_z3p3_12_log_oh_err_upper],
+    fmt="o",
+    color="tab:olive",
+    label="\t $z\sim 3.3$",
+    markersize=4,
+    alpha=1,
+    elinewidth=1,
+    zorder=1
+)
+
+
+### nakajima + 23https://iopscience.iop.org/article/10.3847/1538-4365/acd556/pdf
+nakajima = np.genfromtxt("./data/nakajima+23.txt", skip_header=2)
+nakajima_log_mstar = nakajima[:, 0]
+nakajima_log_mstar_err = nakajima[:, 1]
+nakajima_12_log_oh = nakajima[:, 2]
+nakajima_12_log_oh_err = nakajima[:, 3]
+nakajima_lower_redshift = nakajima[:, 4]
+nakajima_highr_redshift = nakajima[:, 5]
+
+# let's take only those with 4-6 redshift
+nakajima_mask = (nakajima_lower_redshift >= 4) & (nakajima_highr_redshift <= 6)
+ax2.errorbar(
+    nakajima_log_mstar[nakajima_mask],
+    nakajima_12_log_oh[nakajima_mask],
+    xerr=nakajima_log_mstar_err[nakajima_mask],
+    yerr=nakajima_12_log_oh_err[nakajima_mask],
+    fmt="D",
+    color="tab:orange",
+    label=r"Nakajima et al. 2023, $z=4-6$",
+    markersize=4,
+    alpha=0.7,
+    elinewidth=1,
+    zorder=1
+)
+
+
+# langeroodi, z = 9-7
+langeroodi = np.genfromtxt("./data/langeroodi+23.txt")
+langeroodi_log_mstar = langeroodi[:, 1]
+langeroodi_log_mstar_err_lower = langeroodi[:, 2]
+langeroodi_log_mstar_err_upper = langeroodi[:, 3]
+langeroodi_12_log_oh = langeroodi[:, 4]
+langeroodi_12_log_oh_err_lower = langeroodi[:, 5]
+langeroodi_12_log_oh_err_upper = langeroodi[:, 6]
+# for the point with nan values, treat y as an upper limit
+nan_mask = np.isnan(langeroodi_12_log_oh_err_upper)
+langeroodi_12_log_oh_err_upper[nan_mask] = 0
+langeroodi_12_log_oh_err_lower[nan_mask] = langeroodi_12_log_oh[nan_mask]
+
+ax2.errorbar(
+    langeroodi_log_mstar,
+    langeroodi_12_log_oh,
+    xerr=[langeroodi_log_mstar_err_lower, langeroodi_log_mstar_err_upper],
+    yerr=[langeroodi_12_log_oh_err_lower, langeroodi_12_log_oh_err_upper],
+    fmt="s",
+    color="crimson",
+    label=r"Langeroodi et al. 2023, $z=7-9$",
+    markersize=4,
+    alpha=0.7,
+    elinewidth=1,
+    zorder=1
+)
+
+
 ax2.legend(
-    ncols=4,
-    frameon=False,
-    bbox_to_anchor=(1.05, 1),
-    loc="upper left",
-    title=r"redshift $z$",
-    fontsize=10,
+    ncols=1,
+    # frameon=False,
+    # bbox_to_anchor=(0.48, 1.01),
+    loc="lower right",
+    fontsize=9,
+    handletextpad=0.05,
+    labelspacing=0.25,
+    edgecolor="none",
 )
+
+
+
+ax2_right = ax2.twinx()
+ax2_right.set_ylabel(r"log [Z$_\odot$]", fontsize=11)
+# Convert the left y-axis ticks to Z/Z_sun scale
+left_ticks = ax2.get_yticks()
+right_ticks = left_ticks - twelve_log_oh_sun
+ax2_right.set_yticks(left_ticks)
+ax2_right.set_yticklabels([f"{tick - twelve_log_oh_sun:.2f}" for tick in left_ticks])
+ax2_right.set_ylim(ax2.get_ylim())
+
 plt.savefig(
-    "./figures/cgm_metallicity_2phase.png",
+    "./final_figs/fig_11_ism_metallicity_2phase.pdf",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,
 )
 plt.show()
+
+
 
 # %%

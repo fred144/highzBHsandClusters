@@ -13,7 +13,14 @@ from matplotlib.patches import ConnectionPatch
 from scipy.stats import binned_statistic
 from scipy.optimize import curve_fit
 import astropy.constants as consts
+from run_grids_of_models import (
+    run_baseline_model_redshift_grid,
+    run_2phase_model_redshift_grid,
+)
+import h5py
+import os
 
+# %%
 importlib.reload(cgm_sf_regulator)
 plt.rcParams.update(
     {
@@ -53,7 +60,7 @@ f_b = Ob0 / Omegam0
 LCDM = cosmology.LambdaCDM(H0=H0, Om0=Omegam0, Ode0=Omegade0)
 
 
-mhalo_z0 = 2e13 * u.Msun
+mhalo_z0 = 1e12 * u.Msun
 t_span = (0.1, 13.3)  # gyrs
 xlim_for_zoom = (0.166, 2)
 
@@ -78,7 +85,7 @@ def virial_T(mhalo, Rvir):
     return (2 / 5) * ((G * mhalo * mp) / (Rvir * kb))
 
 
-def vcirc_mass_loading(halo_vcirc, alpha_m=9):
+def vcirc_mass_loading(halo_vcirc, alpha_m=0.1):
     return alpha_m * (halo_vcirc.value / 200) ** (-3 / 2)
 
 
@@ -93,6 +100,32 @@ def circular_velocity(mhalo, Rvir):
     return np.sqrt(G * mhalo / Rvir).to(u.km / u.s)
 
 
+def metallicity_energy_loading(ism_metalllicity_z_sun, alpha_e=0.3, exp=-0.5):
+    """energy loading factor as a function of ISM metallicity, power-law form"""
+    eta_e = alpha_e * (ism_metalllicity_z_sun) ** exp
+    print(eta_e)
+    # if eta e > 1 set to 1, ism_metallicity can be float or array
+
+    eta_e = np.where(eta_e > 1, 1, eta_e)
+
+    return eta_e
+
+
+def Zsun_to_twelve_log_oh(Z):
+    zsun = 0.013
+    twelve_log_oh_sun = 8.69
+    twelve_log_oh = twelve_log_oh_sun + np.log10(Z / zsun)
+    return twelve_log_oh
+
+
+def twelve_log_oh_to_Zsun(twelve_log_oh):
+    zsun = 0.013
+    twelve_log_oh_sun = 8.69
+    Z = zsun * 10 ** (twelve_log_oh - twelve_log_oh_sun)
+    Z_sun = Z / zsun
+    return Z_sun
+
+
 # add this function near the top of your file (before the loop)
 def plot_two_phase_eta_scan(
     results_2phase,
@@ -101,11 +134,13 @@ def plot_two_phase_eta_scan(
     derived_2Phase_long,
     alphaM,
     alphaE,
+    eta_Z, # this is a constant value
     mhalo_z0,
     xlim_for_zoom=(0.166, 2),
+    eta_E_scaling_with_Z=(0.3, -0.5),
     show=True,
 ):
-
+    zsun = 0.013
     red1 = "tab:red"
     red2 = "tab:orange"
     blu1 = "dodgerblue"
@@ -143,6 +178,12 @@ def plot_two_phase_eta_scan(
     dot_e_cgm_ej = derived_2phase["dot_e_cgm_out"]
     dot_e_cgm_total = dot_e_cgm_acc + dot_e_sne_wind - dot_e_cgm_ej - dot_e_cgm_cool
 
+    ism_metallicity = results_2Phase_long["m_metals_ism"] / results_2Phase_long["m_ism"]
+    ism_metallicity_z_sun = ism_metallicity / zsun
+
+    cgm_metallicity = results_2Phase_long["m_metals_cgm"] / results_2Phase_long["m_cgm"]
+    cgm_metallicity_z_sun = cgm_metallicity / zsun
+
     # use the long results to compute feedback properties
     zs = results_2Phase_long["z"]
     times = results_2Phase_long["t"] * u.Gyr
@@ -153,6 +194,11 @@ def plot_two_phase_eta_scan(
     halo_vir_temp = virial_T(mhalo_growth_new, halo_rvir).to(u.K)
     eta_m = vcirc_mass_loading(halo_vcirc, alpha_m=aM)
     eta_e = vcirc_energy_loading(halo_vcirc, alpha_e=aE)
+    eta_e_metallicity = metallicity_energy_loading(
+        ism_metallicity_z_sun,
+        alpha_e=eta_E_scaling_with_Z[0],
+        exp=eta_E_scaling_with_Z[1],
+    )
 
     # create figure and main axes
     fig, ax = plt.subplots(2, 1, figsize=(10, 5), dpi=300, sharex=True)
@@ -429,6 +475,7 @@ def plot_two_phase_eta_scan(
         va="bottom",
         color="k",
     )
+
     ax[0].text(
         0.95,
         0.1,
@@ -444,55 +491,153 @@ def plot_two_phase_eta_scan(
     #     plt.show()
     # loading inset
     ax4 = ax[1].inset_axes([1.1, -0.5, 1, 1])
+    ax4.plot(times, eta_m, color=blu2, lw=3, label=r"$\eta_M$")
+    ax4.plot(times, eta_e, color=red2, lw=3, label=r"$\eta_E$", ls="--")
     ax4.plot(
-        times, eta_m, color=blu2, lw=3, label=r"$\eta_M$"
-    )
-    ax4.plot(
-        times, eta_e, color=red2, lw=3, label=r"$\eta_E$", ls="--"
+        times,
+        eta_e_metallicity,
+        color="blue",
+        lw=3,
+        label=r"$\eta_E {{\rm (Z)}}, {{\rm norm}} = {:.2f}, {{\rm exp}} = {:.2f}$".format(
+            eta_E_scaling_with_Z[0], eta_E_scaling_with_Z[1]
+        ),
+        ls=":",
     )
     ax4.set(
         ylabel=r"loading",
         xlabel=r"$t_{\rm univ}$ [Gyr]",
         yscale="log",
         xlim=xlim_for_zoom,
-        ylim=(1e-4,1e2)
+        ylim=(1e-2, 10),
     )
-    ax4.legend(loc="upper right")
+    ax4.legend(loc="lower left", fontsize=14, ncols=3)
+
+    # CGM and ISM metallicity inset
+    ax5 = ax[1].inset_axes([1.1, -1.6, 1, 1])
+    ax5.plot(
+        results_2Phase_long["t"],
+        ism_metallicity_z_sun,
+        color="darkorange",
+        lw=3,
+        label=r"$Z_{\rm ISM}$",
+    )
+    ax5.plot(
+        results_2Phase_long["t"],
+        cgm_metallicity_z_sun,
+        color="purple",
+        lw=3,
+        ls="--",
+        label=r"$Z_{\rm CGM}$",
+    )
+    ax5.legend(loc="best")
+    ax5.set(
+        ylabel=r"Metallicity [$Z_{\odot}$]",
+        xlabel=r"$t_{\rm univ}$ [Gyr]",
+        xlim=xlim_for_zoom,
+        yscale="log",
+    )
+    
+    # large text for all the relevant mass and energy loading terms in the run 
+    text = "Mass loading: " + r"$\alpha_M = {:.3f}$".format(alphaM) + "\n" + "Metal Loading: " + r"$\eta_Z = {:.3f}$".format(eta_Z) + "\n" + r"Energy loading: $\alpha_E = {:.3f}$".format(alphaE) + "\n" + r"Metallicity energy loading: " + "\n" + r"norm = {:.2f}, exp = {:.2f}".format(eta_E_scaling_with_Z[0], eta_E_scaling_with_Z[1])
+    ax5.text(
+        0.05,
+        - 0.5,
+        text,
+        transform=ax5.transAxes,
+        fontsize=15,
+        ha="left",
+        va="top",
+        color="k",
+    )
 
     return fig, ax
 
+
+smmr = np.loadtxt("./data/sm_averages_a1.002310.dat")
+loghm = smmr[5:21, 0]  # halo mass
+hm = 10**loghm * u.solMass
+
+logSM = smmr[5:21, 7]  # stellar mass
+sm = 10 ** logSM[5:21] * u.solMass
+
+SMerr = np.vstack([smmr[5:21, 3], smmr[5:21, 2]])  # error array
+logSMHM = smmr[5:21, 10]  # stellar mass / halo mass
+SMHMerr = np.vstack([smmr[5:21, 12], smmr[5:21, 11]])  # error array
+
+smhm_behroozi = 10**logSMHM / (Ob0 / Omegam0)
+smhm_err_up = 10 ** SMHMerr[1, :]
+smhm_err_low = 10 ** SMHMerr[0, :]
+zobs = [0.01]
+mass_bins = 10
+mhalos = np.geomspace(1e10, 1e13, mass_bins)
+mhalos = np.broadcast_to(mhalos, (len(zobs), mhalos.size)) * u.Msun
 
 # %% do a single run of the 2 phase model and breakdown the energy and mass contributions
 ## this is figure 2 of the first draft of the SF paper
 
 
-# m_loadings = np.linspace(0.12, 10, 20) #np.linspace(0.1, 10, 5)
-# e_loadings = np.ones_like(m_loadings) * 0.1
+# alpha_Ms = np.linspace(0.12, 10, 20) #np.linspace(0.1, 10, 5)
+# alpha_Es = np.ones_like(alpha_Ms) * 0.1
 
-#low specific energy to high specific energy
-m_loadings = np.geomspace(0.0001, 10, 20)[::-1]  
-e_loadings = np.ones_like(m_loadings) * 10
 
-for i, (aM, aE) in enumerate(zip(m_loadings, e_loadings)):
+# eta_E_scaling_with_Z = np.linspace(-0.5, -1, 10)
+# alpha_Es_met_norm = np.geomspace(0.1, 5, 10)
+n_scan = 16
 
+  # np.linspace(-0.5, -1.5, 10)
+# low specific energy to high specific energy
+# alpha_Ms = [0.1]#np.geomspace(0.0001, 10, 20)[::-1]
+# alpha_Es = [0.1]#np.ones_like(alpha_Ms) * 0.1
+# alpha_Es_met_norm = [0.3]
+
+alpha_Ms = np.ones(n_scan) * 0.1
+alpha_Es = np.ones(n_scan) * 0.1
+eta_Zs = np.ones(n_scan) * 0.5 #np.linspace(0.1,0.9,n_scan)
+
+# vary the normalization
+# alpha_Es_met_norm = np.geomspace(0.01, 1, n_scan)
+# alpha_Es_met_exp = np.ones(n_scan) * -1.0
+
+#  vary the exponnents
+# alpha_Es_met_norm = np.ones(n_scan) * 0.3
+# alpha_Es_met_exp = np.linspace(-0.1, -1.5, n_scan) 
+
+alpha_Es_met_norm = [0.1]
+alpha_Es_met_exp = [-1.5]
+
+# vary both
+# alpha_Es_met_norm = np.linspace(0.1, 1, n_scan)
+# alpha_Es_met_exp = np.linspace(-0.5, -1.5, n_scan)
+
+
+for i, (aM, aE) in enumerate(zip(alpha_Ms[:1], alpha_Es[:1])):
+    eta_Z = eta_Zs[i]
     model_2phase = CGMRegulator(
         mhalo_z0,
         (0.2, xlim_for_zoom[1]),
-        KS_kappa_s=0.1,
-        add_f_prevent_floor=1e-6,
+        add_f_prevent_floor=1e-8,
         verbose=False,
         alpha_e=aE,
         alpha_m=aM,
+        eta_z =eta_Z,
+        eta_E_scaling_with_Z=(
+            alpha_Es_met_norm[i],
+            alpha_Es_met_exp[i],
+        ),  
     )
 
     model_2Phase_long = CGMRegulator(
         mhalo_z0,
         (0.15, 13),
-        KS_kappa_s=0.1,
-        add_f_prevent_floor=1e-6,
+        add_f_prevent_floor=1e-8,
         verbose=False,
         alpha_e=aE,
         alpha_m=aM,
+        eta_z =eta_Z,
+        eta_E_scaling_with_Z=(
+            alpha_Es_met_norm[i],
+            alpha_Es_met_exp[i],
+        ),  
     )
 
     run_2phase = model_2phase.run_halo()
@@ -512,16 +657,193 @@ for i, (aM, aE) in enumerate(zip(m_loadings, e_loadings)):
         alphaE=aE,
         mhalo_z0=mhalo_z0,
         xlim_for_zoom=xlim_for_zoom,
+        eta_Z=eta_Z,
+        eta_E_scaling_with_Z=(alpha_Es_met_norm[i], alpha_Es_met_exp[i]),
         show=False,
     )
 
-    plt.savefig(
-    "./figures/scan_specific_energy_sne_winds_2e13/{:04d}_etaM_{:.5f}-etaE_{:.5f}.png".format(
-        i, aM, aE
-    ),
-    dpi=200,
-    bbox_inches="tight",
-    pad_inches=0.05,
+    # do comparison to z=0, observables
+    kappa_sfr = 0.02
+    n_sfr = 1.8
+    r_disk_sfr = 0.018
+
+    param_txt_with_ZdepetaE = (
+        f"KS1998_loadingVcirc_etaZ_scan_z0_{alpha_Es_met_norm[i]:.3f}".replace(".", "p")
+        + f"_{alpha_Es_met_exp[i]:.3f}".replace(".", "p")
+        + f"_{eta_Z:.3f}".replace(".", "p")
+        + f"_{kappa_sfr:.3f}".replace(".", "p")
+        + f"_n{n_sfr:.3f}".replace(".", "p")
+        + f"_r{r_disk_sfr:.3f}".replace(".", "p")
+    )
+    # another set if not varying the metallicity dependence of the energy loading
+    # param_txt = (
+    #     f"KS1998_loadingVcirc_etaZ_scan_z0_{eta_Z:.3f}".replace(".", "p")
+    #     + f"_{kappa_sfr:.3f}".replace(".", "p")
+    #     + f"_n{n_sfr:.3f}".replace(".", "p")
+    #     + f"_r{r_disk_sfr:.3f}".replace(".", "p")
+    # )
+
+    
+    file = "./runs/smhm_2phase_redshift_scan_" f"{param_txt_with_ZdepetaE}.h5"
+
+    if not os.path.exists(file):
+        print("running 2-phase model grid...", file)
+        redshift_variation, zsims = run_2phase_model_redshift_grid(
+            observe_at=zobs,  # redshift we want to observe
+            mhalos=mhalos,
+            write_to_file=file,
+            disk_scale_length=r_disk_sfr,
+            KS_n=n_sfr,
+            KS_kappa_s=kappa_sfr,
+            eta_z=eta_Z,
+            eta_E_scaling_with_Z=(alpha_Es_met_norm[i], alpha_Es_met_exp[i]),
+        )
+        with h5py.File(file, "r") as f:
+            smhm_normalized = f["SMHM"][
+                :
+            ]  
+            mhalo_obs = f["Mhalo_obs"][:]
+            mism = f["MISM_obs"][:]
+            mstar = f["Mstar_obs"][:]
+            mmetals_ism = f["MMetals_ism_obs"][:]
+            print(f.keys())
+            print(f["redshifts"][:])
+    else:
+        print("file already exists")
+        with h5py.File(file, "r") as f:
+            smhm_normalized = f["SMHM"][
+                :
+            ]  
+            print(f.keys())
+            mhalo_obs = f["Mhalo_obs"][:]
+            mmetals_ism = f["MMetals_ism_obs"][:]
+            mism = f["MISM_obs"][:]
+            mstar = f["Mstar_obs"][:]
+           
+            print(f["redshifts"][:])
+
+    # plot the SMHM relation at z=0 and compare to Behroozi
+    ax_smhm = ax[1].inset_axes([0.0, -1.25, 1, 1])
+    ax_smhm.fill_between(
+        10**loghm,
+        smhm_behroozi * smhm_err_low,
+        smhm_behroozi * smhm_err_up,
+        facecolor="grey",
+        alpha=0.3,
+        zorder=0,
+    )
+    ax_smhm.scatter(
+        mhalo_obs[0], smhm_normalized[0], color="crimson", lw=3, label=r"model z=0"
+    )
+    ax_smhm.set(
+        xlabel=r"$M_{\rm halo}$ [$M_{\odot}$]",
+        ylabel=r"$M_{\rm \star} / M_{\rm halo} \: (f_b^{-1})$",
+        xscale="log",
+        yscale="log",
+        xlim=(1e10, 1e13),
+        ylim=(2e-3, 0.2),
+    )
+    ax_smhm.legend(loc="upper left", fontsize=10)
+
+    # plot ISM gas fractions
+    ax_mism = ax[1].inset_axes([0.0, -2.5, 1, 1])
+    ax_mism.scatter(
+        mism[0], mism[0] / mstar[0], color="crimson", lw=3, label=r"model z=0"
     )
 
+    log_m_star_thry = np.linspace(6, 12, 100)
+    m_star_thry = 10**log_m_star_thry
+
+    # Calette but double power law, still LTG
+    C = 1.69
+    a = 0.18
+    b = 0.61
+    log_Mtrunc = 9.2
+    intrinsic_scatter_dbl_pl = 0.44
+    y_dbl_power = C / (
+        (m_star_thry / 10**log_Mtrunc) ** (a) + (m_star_thry / 10**log_Mtrunc) ** b
+    )
+    ax_mism.plot(
+        m_star_thry,
+        y_dbl_power,
+        ls="-.",
+        color="thistle",
+        lw=2,
+        label="Calette+18 LTG DPL",
+        zorder=0,
+    )
+    y_dbl_power_upper = y_dbl_power * 10**intrinsic_scatter_dbl_pl
+    y_dbl_power_lower = y_dbl_power / 10**intrinsic_scatter_dbl_pl
+    ax_mism.fill_between(
+        m_star_thry,
+        y_dbl_power_lower,
+        y_dbl_power_upper,
+        facecolor="thistle",
+        alpha=0.5,
+        zorder=0,
+    )
+    ax_mism.set(
+        xlabel=r"$M_{\rm star}$ [$M_{\odot}$]",
+        ylabel=r"$M_{\rm ISM} / M_{\rm star} \: (f_b^{-1})$",
+        xscale="log",
+        yscale="log",
+        xlim=(1e7, 5e11),
+        ylim=(1e-1, 8),
+    )
+    ax_mism.legend(loc="lower left", fontsize=10)
+
+    
+    # add ism metallicity vs mstar
+    zsun = 0.013
+    ax_zism = ax[1].inset_axes([0.0, -3.75, 1, 1])
+    ism_metallicity_z_sun = (mmetals_ism[0] / mism[0]) / zsun
+    twelve_log_oh = 8.69 + np.log10(ism_metallicity_z_sun)
+    
+    ax_zism.scatter(
+        np.log10(mstar[0]), twelve_log_oh, color="crimson", lw=3, label=r"model z=0"   
+    )
+    # add  observations
+    curti_2020_metallicity = np.loadtxt("./data/curti+20_fig3.csv", delimiter=",")
+    curti_mstar =  curti_2020_metallicity[:, 0]
+    curti_12_log_oh = curti_2020_metallicity[:, 1]
+    curti_lower_values = curti_2020_metallicity[:, 2]
+    curti_upper_values = curti_2020_metallicity[:, 3]
+    ax_zism.plot(
+        curti_mstar,
+        curti_12_log_oh,
+        color="k",
+        label="Curti+20, z~0",
+        lw=2,
+        alpha=1,
+    )
+    ax_zism.set(
+    # xscale="log",
+    # yscale="log",
+    xlabel=r"$M_\star$ [M$_\odot$]",
+    # ylabel=r"ISM Metallicity [$Z_\odot$]",
+    ylabel=r"ISM Metallicity 12 + log(O/H) ",
+    xlim=(7.5,12),
+    ylim = (7.6, 9.3)
+    )
+    ax_zism.fill_between(
+    curti_mstar,
+    curti_lower_values,
+    curti_upper_values,
+    color="k",
+    alpha=0.2,
+    label="Curti+20 scatter",
+)
+    ax_zism.legend(loc="lower right", fontsize=10)
+
+    # plt.savefig(
+    #     "./figures/scan_etaEofZ_exp_etaZ0p5/{:04d}_etaM_{:.5f}-etaE_{:.5f}-etaZ_{:.5f}.png".format(
+    #         i, aM, aE, eta_Z
+    #     ),
+    #     dpi=200,
+    #     bbox_inches="tight",
+    #     pad_inches=0.05,
+    # )
+
     plt.show()
+
+# %%

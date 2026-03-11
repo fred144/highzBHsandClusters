@@ -455,17 +455,17 @@ def plot_two_phase_epsilon_scan(
         va="bottom",
         color="k",
     )
-    ax[0].text(
-        0.95,
-        0.1,
-        r"$\epsilon_{{\dot{{M}}_{{\rm CGM, cooling}}}} = {:.6f}$".format(eps),
-        transform=ax[0].transAxes,
-        fontsize=12,
-        ha="right",
-        va="bottom",
-        color="k",
-        bbox=dict(facecolor="grey", edgecolor="k", alpha=0.7),
-    )
+    # ax[0].text(
+    #     0.95,
+    #     0.1,
+    #     r"$\epsilon_{{\dot{{M}}_{{\rm CGM, cooling}}}} = {:.6f}$".format(eps),
+    #     transform=ax[0].transAxes,
+    #     fontsize=12,
+    #     ha="right",
+    #     va="bottom",
+    #     color="k",
+    #     bbox=dict(facecolor="grey", edgecolor="k", alpha=0.7),
+    # )
 
     # if show:
     #     plt.show()
@@ -508,21 +508,17 @@ for i, e in enumerate(epsilons):
         verbose=False,
         # alpha_e=0.1,
         # alpha_m=0.1,
-        updated_loadings=True,
-        updated_halo_infall=True,
+      
         dbug_norm_for_2_phase_CGM=e,
     )
 
     model_2Phase_long = CGMRegulator(
         mhalo_z0,
         (0.15, 13),
-       
         add_f_prevent_floor=1e-6,
         verbose=False,
         # alpha_e=0.1,
         # alpha_m=0.1,
-        updated_loadings=True,
-        updated_halo_infall=True,
         dbug_norm_for_2_phase_CGM=e,
     )
 

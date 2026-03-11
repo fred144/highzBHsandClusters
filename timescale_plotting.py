@@ -27,7 +27,7 @@ import matplotlib.lines as mlines
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 plt.rcParams.update(
     {
-        "text.usetex": False,
+        "text.usetex": True,
         # "font.family": "Helvetica",
         "font.family": "serif",
         "mathtext.fontset": "cm",
@@ -38,8 +38,8 @@ plt.rcParams.update(
         "ytick.direction": "in",
         "ytick.right": True,
         "xtick.top": True,
-        "xtick.major.size": 4,
-        "ytick.major.size": 4,
+        "xtick.major.size": 6,
+        "ytick.major.size": 6,
         "xtick.minor.size": 3,
         "ytick.minor.size": 3,
         "xtick.minor.visible": True,
@@ -86,6 +86,9 @@ model_2phase = CGMRegulator(
     disk_scale_length=0.018,
     KS_parametrization="KS1998",
     TEST_tej_Tvir_definition=False,
+    eta_z=0.7,
+    alpha_e=0.1,
+    alpha_m=0.1,
 )
 model_2phase.run_halo()
 results_2phase = model_2phase.get_results()
@@ -124,10 +127,10 @@ ax.plot(
     sim_time,
     t_ejection,
     lw=3,
-    color=color_green,
-    label=r"$t_{\mathrm{ejection}}$",
+    color="green",
+    label=r"$t_{\mathrm{ej, C23}}$",
     ls=":",
-    alpha=0.8,
+    alpha=1,
 )
 
 ax.plot(
@@ -174,7 +177,7 @@ ax.plot(
     t_ejection_2,
     lw=3,
     color=color_green,
-    label=r"$t_{\mathrm{ejection}}$",
+    label=r"$t_{\mathrm{ej}}$",
     ls="--",
 )
 # Overlay baseline depletion time for comparison
@@ -187,7 +190,7 @@ ax.set(
     xlim=(results_2phase["t"][0] * 0.8, 13),
     ylabel=r"timescales $[\mathrm{Gyr}]$",
 )
-ax.legend(frameon=False, ncol=2, fontsize=10)
+ax.legend(frameon=False, ncol=2, fontsize=12)
 
 ax.set_xlabel(r"time $[\mathrm{Gyr}]$")
 
@@ -195,7 +198,7 @@ ax.set_xlabel(r"time $[\mathrm{Gyr}]$")
 # ax[1].set_xlim(ax[0].get_xlim())
 
 plt.savefig(
-    "./figures/model_timescales_comparison.png",
+    "./final_figs/fig_3_model_timescales_comparison.pdf",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,
@@ -219,6 +222,9 @@ for mhalo in halo_masses:
         disk_scale_length=0.018,
         KS_parametrization="KS1998",
         TEST_tej_Tvir_definition=False,
+        eta_z=0.7,
+        alpha_e=0.1,
+        alpha_m=0.1,
     )
     model_2phase.run_halo()
     results_2phase = model_2phase.get_results()
@@ -240,9 +246,9 @@ for mhalo in halo_masses:
     dot_e_plus = dot_e_cgm_in + dot_e_ism_wind
     dot_e_minus = dot_e_cgm_cooling + dot_e_cgm_cooling
     # metal evolution
-    m_metals = results_2phase["m_metals"]
+    m_metals = results_2phase["m_metals_cgm"]
     cgm_metallicity = m_metals / (
-        results_2phase["m_cgm_hot"] + results_2phase["m_cgm_cold"]
+        results_2phase["m_cgm"] + results_2phase["m_cgm"]
     )
     cgm_Z_sun = cgm_metallicity / 0.0134
 
@@ -498,9 +504,8 @@ ax[1].text(
     va="top",
 )
 
-
 plt.savefig(
-    "./figures/timescale_ratios.png", dpi=200, bbox_inches="tight", pad_inches=0.05
+    "./final_figs/fig_5_timescale_ratios.pdf", dpi=200, bbox_inches="tight", pad_inches=0.05
 )
 plt.show()
 
@@ -611,12 +616,12 @@ fig.text(1, 1.2, r"$z$", ha="left", va="top", transform=ax[0].transAxes)
 for axes in ax:
     for line in axes.lines:
         line.set_zorder(1)
-# plt.savefig(
-#     "./figures/cgm_temperature_and_density.png",
-#     dpi=300,
-#     bbox_inches="tight",
-#     pad_inches=0.05,
-# )
+plt.savefig(
+    "./final_figs/fig_6_cgm_temperature_and_density.pdf",
+    dpi=300,
+    bbox_inches="tight",
+    pad_inches=0.05,
+)
 plt.show()
 
 # %% similar to timescale ratios but get the contributions from the different dot E terms
@@ -830,7 +835,7 @@ cbar.ax.set_xscale("log")
 
 
 plt.savefig(
-    "./figures/dotE_contribution_ratios.png",
+    "./final_figs/fig_7_dotE_contribution_ratios.pdf",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,

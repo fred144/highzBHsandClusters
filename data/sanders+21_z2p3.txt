@@ -1,0 +1,7 @@
+# log Mstar/Mdot  lowerr    uppererr    12_log(O/H)     lowererr    uppererr
+# https://iopscience.iop.org/article/10.3847/1538-4357/abf4c1/pdf#page=4.92
+9.33    0.05    0.01    8.30    0.02    0.02    
+9.62    0.03    0.01    8.41    0.02    0.02
+9.89    0.02    0.02    8.48    0.02    0.02    
+10.23   0.02    0.02    8.57    0.01    0.01    
+10.64   0.03    0.06    8.64    0.03    0.04

@@ -292,7 +292,7 @@ ax[0, 0].text(
 )
 
 plt.savefig(
-    "./figures/appendix_mass_fprevent.png", dpi=200, bbox_inches="tight", pad_inches=0.05
+    "./final_figs/appendix_mass_fprevent.pdf", dpi=200, bbox_inches="tight", pad_inches=0.05
 )
 plt.show()
 # %% now do the same for the energy rates, total energy, total energy rate, then breakdown of energy rates
@@ -473,7 +473,7 @@ ax[2, 1].set(ylabel=r"$t_{\rm dep, eff}$ [Gyr]", yscale="log", ylim=(5e-4, 0.9),
 ax[2, 2].set(ylabel=r"$t_{\rm eject}$ [Gyr]", yscale="log", ylim=(5e-4, 0.9), xlabel=r"$t_{\rm univ}$ [Gyr]",)
 
 plt.savefig(
-    "./figures/appendix_energy_fprevent.png", dpi=200, bbox_inches="tight", pad_inches=0.05
+    "./final_figs/appendix_energy_fprevent.pdf", dpi=200, bbox_inches="tight", pad_inches=0.05
 )
 plt.show()
 # %%

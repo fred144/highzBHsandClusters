@@ -30,8 +30,8 @@ plt.rcParams.update(
         "ytick.direction": "in",
         "ytick.right": True,
         "xtick.top": True,
-        "xtick.major.size": 4,
-        "ytick.major.size": 4,
+        "xtick.major.size": 6,
+        "ytick.major.size": 6,
         "xtick.minor.size": 3,
         "ytick.minor.size": 3,
         "xtick.minor.visible": True,
@@ -70,6 +70,7 @@ model_2phase = CGMRegulator(
     disk_scale_length=0.018,
     KS_parametrization="KS1998",
     TEST_tej_Tvir_definition=False,
+    eta_z=0.7,
     # cooling_tables="Wiersama+09",
 )
 run_2phase = model_2phase.run_halo()
@@ -199,7 +200,6 @@ ax[1].plot(
     # label=r"$\dot{E}_{\rm CGM, total}$",
     ls=":",
 )
-
 
 ax[1].set(
     ylabel=r"$\dot{E}_{\rm CGM}~ [{\rm erg\: Gyr^{-1}}]$",
@@ -335,7 +335,6 @@ ax[6].plot(
     label=r"$\dot{M}_{\rm SNe, wind}$",
     color=red2,
 )
-
 
 ax[6].set(
     ylabel=r"mass rates $[{\rm M_{\odot}}\: {\rm Gyr^{-1}}]$",
@@ -486,7 +485,7 @@ for axes in ax:
         line.set_zorder(1)
 
 plt.savefig(
-    "./figures/fig_2phase_detailed_cgm_1e12_KS1988.png",
+    "./final_figs/fig_2_2phase_detailed_cgm_mw_mass.pdf",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,
@@ -507,6 +506,7 @@ model_2phase = CGMRegulator(
     disk_scale_length=0.018,
     KS_parametrization="KS1998",
     TEST_tej_Tvir_definition=False,
+    eta_z=0.7,
 )
 run_2phase = model_2phase.run_halo()
 results_2phase = model_2phase.get_results()
@@ -521,6 +521,7 @@ model_2Phase_long = CGMRegulator(
     disk_scale_length=0.018,
     KS_parametrization="KS1998",
     TEST_tej_Tvir_definition=False,
+    eta_z=0.7,
 )
 run_2Phase_long = model_2Phase_long.run_halo()
 results_2Phase_long = model_2Phase_long.get_results()
@@ -792,7 +793,7 @@ for axes in ax:
     for line in axes.lines:
         line.set_zorder(1)
 
-x = [0.205, 0.24, 0.255, 0.298, 0.339]
+x = [0.205, 0.238, 0.250, 0.298, 0.335]
 label = ["(a)", "(b)", "(c)", "(d)", "(e)"]
 colors = ["k", "k", "k", "k", "k"]
 ty = [1e9, 1e9, 1e6, 5e6, 5e6]
@@ -812,7 +813,7 @@ ax[0].set_facecolor("whitesmoke")
 ax[1].set_facecolor("whitesmoke")
 
 plt.savefig(
-    "./figures/fig_cgm_cycle_zoom_KS1998.png",
+    "./final_figs/fig_4_cgm_cycle_zoom_MW.pdf",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,
@@ -821,7 +822,7 @@ plt.show()
 
 # %% ######### now phase plot of the cycle this did not do anything
 
-
+"""
 # we start by fitting the oscillations to get some central tendency
 def ln_fit(x, a, b):
     return a * np.log(x) + b
@@ -1280,8 +1281,8 @@ ax[0, 2].text(
 )
 
 # plt.savefig(
-#     "./figures/E_phase_plots.png", dpi=300, bbox_inches="tight", pad_inches=0.05
+#     "./figures/E_phase_plots.pdf", dpi=300, bbox_inches="tight", pad_inches=0.05
 # )
 plt.show()
 
-# %%
+"""

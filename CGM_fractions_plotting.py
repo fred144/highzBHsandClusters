@@ -166,7 +166,7 @@ cmap_colors.append((0.5, 0.5, 0.5))  # add grey color
 
 # %%
 # write to file
-file = "./runs/smhm_2phase_redshift_scan_KS1998_16_bins_kappa0p02_n1p8_r0p018.h5"
+file = "./runs/smhm_2phase_redshift_scan_redshift_scan_KS_1998_16bins_Radau_0p02_n1p8_r0p018_etaZ0p7.h5"
 
 if not os.path.exists(file):
     redshift_variation, zsims = run_2phase_model_redshift_grid(
@@ -186,9 +186,9 @@ else:
 fig, ax = plt.subplots(
     2,
     2,
-    figsize=(10.25, 5),
+    figsize=(10.25, 5.5),
     dpi=300,
-    gridspec_kw={"height_ratios": [3, 2]},
+    gridspec_kw={"height_ratios": [3, 1.5]},
     sharex=True,
 )
 plt.subplots_adjust(hspace=0.05)
@@ -366,11 +366,12 @@ ax[0, 0].errorbar(
     ],
     fmt="s",
     color="k",
-    label=r"nearby dwarfs (Zheng et al. 2024)",
+    label=r"nearby dwarfs, $z = 0.003 - 0.3$ (Zheng et al. 2024)",
     zorder=10,
     markersize=6,
     lw=1.5,
     alpha=0.7,
+    
 )
 
 # upper limits on dwarfs faerman et al https://ui.adsabs.harvard.edu/abs/2025ApJ...982L..30F/abstract
@@ -455,7 +456,8 @@ ax[0, 1].errorbar(
     yerr=mwarmhot_werk14_total_err,
     fmt="D",
     color="k",
-    label=r"COS-Halos, warm+hot" "\n""(Tumlinson et al. 2011; Peeples et al. 2014;" "\n" " Anderson et al. 2013; Werk et al. 2014)",
+    # label=r"COS-Halos, warm+hot" "\n""(Tumlinson et al. 2011; Peeples et al. 2014;" "\n" " Anderson et al. 2013; Werk et al. 2014)",
+    label=r"COS-Halos, warm + hot",
     zorder=10,
     markersize=6,
     lw=1.5,
@@ -486,13 +488,13 @@ marvels_mcgmwarm = 10**df["M_Warm_CGM"].values
 ax[1, 1].legend(
     frameon=False,
     loc="lower center",
-    fontsize=10,
+    fontsize=11,
     ncol=9,
     title=r"$z$",
-    bbox_to_anchor=(-0.1, 2.6),
+    bbox_to_anchor=(-0.1, 3.1),
     handletextpad=0.3,
 )
-ax[0, 1].legend(frameon=False, loc="lower right", fontsize=8, ncol=1, handletextpad=0.1, columnspacing=0.5)
+ax[0, 1].legend(frameon=False, loc="lower right", fontsize=10, ncol=1, handletextpad=0.1, columnspacing=0.5)
 # rescale legend markers
 ax[0, 0].legend(frameon=False, loc="lower right", fontsize=8,  ncols=1, handletextpad=0.1, columnspacing=0.5, markerscale=0.8)
 
@@ -508,7 +510,7 @@ for axes in ax.ravel():
         line.set_zorder(1)
 
 plt.savefig(
-    "./figures/twophase_CGM_fractions.png",
+    "./final_figs/fig_9_twophase_CGM_fractions.pdf",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,

@@ -232,13 +232,15 @@ models_label_C23 = "C23 model"
 kappa_sfr = 0.02
 n_sfr = 1.8
 r_disk_sfr = 0.018
-
+eta_z = 0.7
 param_txt = (
-    f"KS1998_16_bins_kappa{str(kappa_sfr).replace('.', 'p')}_"
+    f"redshift_scan_KS_1998_16bins_Radau_{str(kappa_sfr).replace('.', 'p')}_"
     + f"n{str(n_sfr).replace('.', 'p')}_"
     + f"r{str(r_disk_sfr).replace('.', 'p')}"
+    + f"_etaZ{str(eta_z).replace('.', 'p')}"
 )
 file = "./runs/smhm_2phase_redshift_scan_" f"{param_txt}.h5"
+
 
 if not os.path.exists(file):
     print("running 2-phase model grid...", file)
@@ -249,6 +251,7 @@ if not os.path.exists(file):
         disk_scale_length=r_disk_sfr,
         KS_n=n_sfr,
         KS_kappa_s=kappa_sfr,
+        eta_z=eta_z,
     )
 else:
     print("file already exists")
@@ -646,7 +649,6 @@ ax[0].legend(
     loc="lower right",
 )
 
-
 # ax[0].text(
 #     0.05,
 #     0.95,
@@ -671,7 +673,7 @@ ax[0].text(
     fontsize=10
 )
 plt.savefig(
-    "./figures/comparison_SMHM_KS_kap0p02_rd_0p018_n_1p8.png",
+    "./final_figs/fig_8_comparison_SMHM_KS_kap0p02_rd_0p018_n_1p8_etaZ_0p7.pdf",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,
