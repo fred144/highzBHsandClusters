@@ -749,18 +749,18 @@ if PLOT_TWO_PANEL:
 if PLOT_TWO_PANEL:
     ax[0, 0].set(
         yscale="log",
-        ylabel=r"$\dot{E}_{\rm CGM, cool}/\dot{E}_{\rm CGM, added}$",
+        ylabel=r"$\dot{E}_{\rm cooling}/\dot{E}_{\rm CGM, added}$",
         xlim=(0.08, 5),
         ylim=(2e-3, 0.9),
         xscale="log",
     )
     ax[0, 1].set(yscale="log", xlim=(0.08, 5), xscale="log")
     ax[1, 0].set(
-        yscale="log", ylabel=r"$\dot{E}_{\rm CGM,ej}/\dot{E}_{\rm CGM, added}$"
+        yscale="log", ylabel=r"$\dot{E}_{\rm ej}/\dot{E}_{\rm CGM, added}$"
     )
     ax[1, 1].set(yscale="log")
     ax[2, 0].set(
-        yscale="log", ylabel=r"$\dot{E}_{\rm CGM,in}/\dot{E}_{\rm CGM, added}$"
+        yscale="log", ylabel=r"$\dot{E}_{\rm in}/\dot{E}_{\rm CGM, added}$"
     )
     ax[2, 1].set(yscale="log")
     ax[3, 0].set(
@@ -794,13 +794,13 @@ if PLOT_TWO_PANEL:
 else:
     ax[0].set(
         yscale="log",
-        ylabel=r"$\dot{E}_{\rm CGM, cool}/\dot{E}_{\rm CGM, added}$",
+        ylabel=r"$\dot{E}_{\rm cooling}/\dot{E}_{\rm CGM, added}$",
         xlim=(0.08, 5),
         ylim=(2e-3, 0.9),
         xscale="log",
     )
-    ax[1].set(yscale="log", ylabel=r"$\dot{E}_{\rm CGM,ej}/\dot{E}_{\rm CGM, added}$")
-    ax[2].set(yscale="log", ylabel=r"$\dot{E}_{\rm CGM,in}/\dot{E}_{\rm CGM, added}$")
+    ax[1].set(yscale="log", ylabel=r"$\dot{E}_{\rm ej}/\dot{E}_{\rm CGM, added}$")
+    ax[2].set(yscale="log", ylabel=r"$\dot{E}_{\rm in}/\dot{E}_{\rm CGM, added}$")
     ax[3].set(
         yscale="log",
         ylabel=r"$\dot{E}_{\rm SNe,wind}/\dot{E}_{\rm CGM, added}$",
@@ -857,14 +857,14 @@ for res in halo_results[:1]:
         times,
         dot_e_plus,
         color=color,
-        label=r"$\dot{E}_{\rm CGM,in} + \dot{E}_{\rm SNe, wind}$",
+        label=r"$\dot{E}_{\rm in} + \dot{E}_{\rm SNe, wind}$",
     )
     ax.plot(
         times,
         dot_e_minus,
         color=color,
         ls="--",
-        label=r"$\dot{E}_{\rm CGM,cool} + \dot{E}_{\rm CGM, ej}$",
+        label=r"$\dot{E}_{\rm cooling} + \dot{E}_{\rm ej}$",
     )
 ax.legend(frameon=False, fontsize=10)
 ax.set(

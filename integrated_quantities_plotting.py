@@ -701,7 +701,7 @@ ax3.set_xticklabels([])
 ax[5].plot(results_latest["t"], results_latest["egy_radloss"], color=color_latest, lw=3)
 ax[5].plot(results["t"], results["egy_radloss"], color=color_baseline, lw=3, ls="--")
 ax[5].set(
-    ylabel=r"$E_{\rm CGM, cool}$",
+    ylabel=r"$E_{\rm cooling}$",
     yscale="log",
     ylim=(2e54, 6e58),
     xlim=(0.25, results["t"][-1]),
@@ -717,7 +717,7 @@ ax5.set_xticklabels([])
 ax[7].plot(results_latest["t"], results_latest["egy_eject"], color=color_latest, lw=3)
 ax[7].plot(results["t"], results["egy_eject"], color=color_baseline, lw=3, ls="--")
 ax[7].set(
-    ylabel=r"$E_{\rm CGM, ej}$",
+    ylabel=r"$E_{\rm ej}$",
     yscale="log",
     ylim=(2e54, 6e58),
     xlim=(0.25, results["t"][-1]),
@@ -733,7 +733,7 @@ ax7.set_xticklabels([])
 ax[9].plot(results_latest["t"], results_latest["egy_cgm_in"], color=color_latest, lw=3)
 ax[9].plot(results["t"], results["egy_accrete"], color=color_baseline, lw=3, ls="--")
 ax[9].set(
-    ylabel=r"$E_{\rm CGM, in}$",
+    ylabel=r"$E_{\rm in}$",
     yscale="log",
     ylim=(2e54, 6e58),
     xlim=(0.25, results["t"][-1]),

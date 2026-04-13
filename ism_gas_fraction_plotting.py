@@ -771,7 +771,7 @@ print(f.keys())
 print(f["redshifts"][:])
 
 
-fig, ax = plt.subplots(2, 1, figsize=(5, 6.5), dpi=300, sharex=True, sharey="row")
+fig, ax = plt.subplots(2, 1, figsize=(4.5, 7), dpi=300, sharex=True, sharey="row")
 ax = ax.flatten()
 plt.subplots_adjust(hspace=0.05)
 # get a colormap from cmasher
@@ -782,62 +782,103 @@ colors[-1] = [0.5, 0.5, 0.5, 1.0]
 Tvir_max = 1e6 * u.K
 # loop through redshift and plot mgas/mstar vs mstar
 for i, z in enumerate(zs):
-    Tvirs = halo_Tvirs[i]
-    mask = Tvirs < Tvir_max
+    Tvirs = halo_Tvirs[i].value
+    mask_solid = Tvirs < Tvir_max.value
+    mask_dotted = Tvirs >= Tvir_max.value
 
+    # Plot solid line for Tvir < 1e6 K
     ax[0].plot(
-        mstar[i],
-        mism[i] / mstar[i],
+        mstar[i][mask_solid],
+        (mism[i] / mstar[i])[mask_solid],
         color=colors[i],
         label=r"${:.1f}$".format(z),
         lw=3
     )
-    ax[0].scatter(
-        mstar[i][mask],
-        mism[i][mask] / mstar[i][mask],
-        s=30,
+    # Plot dotted line for Tvir >= 1e6 K
+    ax[0].plot(
+        mstar[i][mask_dotted],
+        (mism[i] / mstar[i])[mask_dotted],
         color=colors[i],
-        edgecolor="k",
-        zorder=3,
+        lw=3,
+        linestyle=":"
     )
+    # connect solid and dotted lines if both exist
+    if np.any(mask_solid) and np.any(mask_dotted):
+        last_solid_idx = np.where(mask_solid)[0][-1]
+        first_dotted_idx = np.where(mask_dotted)[0][0]
+        ax[0].plot(
+            [mstar[i][last_solid_idx], mstar[i][first_dotted_idx]],
+            [(mism[i] / mstar[i])[last_solid_idx], (mism[i] / mstar[i])[first_dotted_idx]],
+            color=colors[i],
+            lw=3,
+            linestyle=":"
+        )
 
     t_depletion = mism[i] / sfr[i]
     sSFR_Gyr = sfr[i] / mstar[i]  # Gyr^-1
     sSFR_yr = sSFR_Gyr * 1e-9
     sfr_yr = sfr[i] * 1e-9
     ax[1].plot(
-        mstar[i],
-        sfr_yr,
+        mstar[i][mask_solid],
+        sfr_yr[mask_solid],
         color=colors[i],
         lw=3
     )
-    ax[1].scatter(
-        mstar[i][mask], sfr_yr[mask], s=30, color=colors[i], edgecolor="k", zorder=3
+    ax[1].plot(
+        mstar[i][mask_dotted],
+        sfr_yr[mask_dotted],
+        color=colors[i],
+        lw=3,
+        linestyle=":"
     )
+    # Connect solid and dotted lines for SFR panel
+    if np.any(mask_solid) and np.any(mask_dotted):
+        last_solid_idx = np.where(mask_solid)[0][-1]
+        first_dotted_idx = np.where(mask_dotted)[0][0]
+        ax[1].plot(
+            [mstar[i][last_solid_idx], mstar[i][first_dotted_idx]],
+            [sfr_yr[last_solid_idx], sfr_yr[first_dotted_idx]],
+            color=colors[i],
+            lw=3,
+            linestyle=":"
+        )
+    # add redshift labels at the end of each dotted line
+    if np.any(mask_dotted):
+        if i >0:
+            z_label = r"${:.1f}$".format(z)
+        else:
+            z_label = r"$z={:.1f}$".format(z)
+        ax[0].text(
+            mstar[i][mask_dotted][-1] * 1.1,
+            (mism[i] / mstar[i])[mask_dotted][-1],
+            z_label,
+            color=colors[i],
+            fontsize=8
+        )
 
-lines = ax[0].get_lines()
-l1 = lines[0]
-labelLine(
-    l1,
-    3e10,
-    label=r"$z={}$".format(zs[0]),
-    align=False,
-    yoffset=0.0,
-    ha="left",
-    backgroundcolor="none",
-    fontsize=7,
-    # color="black",
-)
-labelLines(
-    lines[1:],
-    xvals=np.geomspace(2e9, 1e12, len(lines) - 1),
-    yoffsets=0.01,
-    align=False,
-    fontsize=7,
-    # ha="left",
-    backgroundcolor="none",
-    # color="black",
-)
+# lines = ax[0].get_lines()
+# l1 = lines[0]
+# labelLine(
+#     l1,
+#     3e10,
+#     label=r"$z={}$".format(zs[0]),
+#     align=False,
+#     yoffset=0.0,
+#     ha="left",
+#     backgroundcolor="none",
+#     fontsize=7,
+#     # color="black",
+# )
+# labelLines(
+#     lines[1:],
+#     xvals=np.geomspace(2e9, 1e12, len(lines) - 1),
+#     yoffsets=0.01,
+#     align=False,
+#     fontsize=7,
+#     # ha="left",
+#     backgroundcolor="none",
+#     # color="black",
+# )
 
 
 # make a line passing through (8.7, 0.322and (10.35, -0.5) and extend it to the left and right
@@ -1050,7 +1091,7 @@ halo_gas_mass_fraction = halo_gas / halo_total
 #     color="gray")
 
 
-x_theory = np.geomspace(1e6, 1e12, 20)  # some theory lines
+x_theory = np.geomspace(1e6, 2e12, 20)  # some theory lines
 
 
 # Renzini & Peng 2015 SFMS with 0.3 dex scatter
@@ -1251,7 +1292,7 @@ ax[1].set(
     yscale="log",
     xlabel=r"$ M_\star [{\rm M_\odot}]$",
     ylabel=r"${\rm SFR ~[M_\odot ~yr^{-1}]}$",
-    xlim=(8e6, 8e11),
+    xlim=(8e6, 2e12),
     ylim=(2e-4, 9),
 )
 # add text for the KS parameters used
@@ -1281,7 +1322,7 @@ fig2, ax2 = plt.subplots(figsize=(4.5, 4), dpi=300)
 
 for i, z in enumerate(zs):
     metallicity = (mmetal_ism[i] / mism[i]) 
-    metallicity_zsun =  metallicity / z_sun
+    metsallicity_zsun =  metallicity / z_sun
     twelv_log_oh = Zsun_to_twelve_log_oh(metallicity_zsun)
     # ax2.plot(
     #     mstar[i],

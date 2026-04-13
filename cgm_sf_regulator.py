@@ -1020,8 +1020,10 @@ class CGMRegulator:
         m_metals_cgm = float(mass[5])  # Msun (metal mass in Msun)
         m_metals_ism = float(mass[6])  # Msun (metal mass in Msun)
         m_halo = float(mass[7])  # Msun
-        # Backward compatibility: accept both legacy (13-state) and current (9-state)
-        # vectors so older analysis scripts can still call mass_evolution safely.
+        
+        # backward compatibility: accept both legacy (13-state) and current (9-state)
+        # vectors so older analysis scripts can still call mass_evolution safely
+        # otherwise, leave out the integrated quantities to integrate for later
         if len(mass) >= 13:
             e_ism_wind = float(mass[8])  # erg
             e_cgm_cool = float(mass[9])  # erg
@@ -1218,7 +1220,7 @@ class CGMRegulator:
 
         ### cooling time and energy cooling rate (Gyr units)
         # cgm_specific_e: erg per g (use max between e_per_mass and kb*T/mu)
-        kb_term_erg_per_g = kb_erg_per_K * cgm_temp_K / mu_g if mu_g > 0 else 0.0
+        kb_term_erg_per_g = kb_erg_per_K * cgm_temp_K / mu_g 
         cgm_specific_e_erg_per_g = self.cgm_ejecti_specific_energy_ratio * max(
             e_per_mass_erg_per_g, kb_term_erg_per_g
         )
@@ -1371,10 +1373,8 @@ class CGMRegulator:
 
         if self.add_f_prevent_constant is not None:
             f_prevent = float(self.add_f_prevent_constant)
-
-        dot_m_cgm_in = (
-            f_prevent * dot_m_cgm_accreted
-        )  # this is attenuated now after this line
+        # this is attenuated now after this line
+        dot_m_cgm_in = f_prevent * dot_m_cgm_accreted  
 
         ##################### BH routines
         # c_s = np.sqrt(self.kb * cgm_temp / self.mu).to(u.km / u.s)
@@ -1479,45 +1479,28 @@ class CGMRegulator:
         dot_m_metal_ism = (
             (1 - self.eta_z) * self.metal_yield * dot_m_sfr+ cgm_metallicity* dot_m_cgm_cold_falling
         )
-        # print(dot_m_metal_ism, dot_m_sfr, cgm_metallicity, dot_m_cgm_cold_falling, m_cgm_cold)
-        # print("falling_into_ism", falling_into_ism, "dot_m_cgm_cold_falling", dot_m_cgm_cold_falling, "dot_m_cgm_hot_cooling", dot_m_cgm_hot_cooling, "dot_m_cgm_cold", dot_m_cgm_cold, "m_cgm_cold", m_cgm_cold)
         
-        
-        # safety guards for low CGM masses
+        #### safety guards for low CGM masses
         # for hot CGM: suppress negative derivatives when mass is low AND handle negative masses
         floor_m_cgm = 1e3
         if (m_cgm_hot < floor_m_cgm) and (dot_m_cgm_hot < 0):
             old_dot_m_cgm_hot = dot_m_cgm_hot
             # suppress negative derivatives when mass is low
             dot_m_cgm_hot *= max((m_cgm_hot - floor_m_cgm) / floor_m_cgm, 0.0)
-            
-            # elif m_cgm_hot < 0:
-            #     # if mass went negative set to 0
-            #     dot_m_cgm_hot = 0 # max(dot_m_cgm_hot, abs(m_cgm_hot) * 0.1)
             warning_message = (
                 f"dot_m_cgm_hot={old_dot_m_cgm_hot:.3e} (m_cgm_hot={m_cgm_hot:.3e})"
             )
-            warnings.warn(
-                warning_message,
-            )
+            warnings.warn(warning_message)
         # for cold CGM: suppress negative derivatives AND handle negative masses
         if (m_cgm_cold < floor_m_cgm) and (dot_m_cgm_cold < 0):
             # if dot_m_cgm_cold < 0:
             # suppress negative derivatives when mass is low
-            
             old_dot_m_cgm_cold = dot_m_cgm_cold
-            
             dot_m_cgm_cold *= max((m_cgm_cold - floor_m_cgm) / floor_m_cgm, 0.0)
-                
-            # elif m_cgm_cold < 0:
-            #     # if mass went negative, force derivative to recover (restore mass slowly)
-            #     dot_m_cgm_cold = 0 # max(dot_m_cgm_cold, abs(m_cgm_cold) * 0.1)
             warning_message = (
                 f"dot_m_cgm_cold={old_dot_m_cgm_cold:.3e} (m_cgm_cold={m_cgm_cold:.3e})"
             )
-            warnings.warn(
-                warning_message,
-            )
+            warnings.warn(warning_message)
             
         # safety guards for low CGM and ism metallicities
         # Zsun_min = self.Z_IGM * self.Z_sol
@@ -1606,9 +1589,7 @@ class CGMRegulator:
                     float(dot_e_cgm_in_erg_per_Gyr),
                     float(dot_e_ism_wind_erg_per_Gyr),
                     float(dot_m_cgm_out),
-                    float(
-                        dot_m_cgm_hot
-                    ),  # Msun / Gyr: hot bucket that feeds the cold buckets
+                    float(dot_m_cgm_hot),  
                     float(dot_m_cgm_cold),  # Msun / Gyr: cold bucket that feeds the ISM
                     float(dot_m_cgm_in),
                     float(dot_m_ism_wind),
@@ -1679,10 +1660,10 @@ class CGMRegulator:
         initial_ism_metal_zsun = 0.001
         mass_ism_metals_0 = mass_ism_gas_0 * initial_ism_metal_zsun * self.Z_sol
 
-        # initial
+        ### initial values
 
-        # State-vector refactor: only evolve the physically coupled variables.
-        # Diagnostic cumulative energy channels are reconstructed after integration.
+        # only evolve the physically coupled variables.
+        # diagnostic cumulative energy channels are reconstructed after integration.
         # initial conditions masses and energ
         initial_values = np.array(
             [
@@ -1730,10 +1711,10 @@ class CGMRegulator:
         t0 = time.perf_counter()
         print(f"Starting ODE solver (perf_counter={t0:.6f})")
 
-        # If tstep != 1, return solution sampled at a user-specified cadence.
-        # Otherwise, let the solver choose adaptive output times.
-        # Set component-wise absolute tolerances to match the scale of each variable.
-        # Default atol=1e-6 is catastrophically mismatched when masses (~1e4 Msun) and
+        # if tstep != 1, return solution sampled at a user-specified cadence.
+        # otherwise, let the solver choose adaptive output times.
+        # set component-wise absolute tolerances to match the scale of each variable.
+        # default atol=1e-6 is catastrophically mismatched when masses (~1e4 Msun) and
         # energies (~1e48 erg) share the same state vector: BDF's Jacobian finite-difference
         # perturbations become meaningless, Newton's method diverges, and steps collapse.
         
@@ -1750,7 +1731,7 @@ class CGMRegulator:
             1e4,         # [7] m_halo
             atol_energy, # [8] e_cgm
         ])
-        # solver update: Radau is more robust than BDF or rk45
+        # radau is more robust than BDF or rk45
         # transitions in this RHS; a small first_step resolves the startup transient.
         if self.tstep != 1:
             if self.tstep <= 0:
@@ -1794,11 +1775,11 @@ class CGMRegulator:
         mmetals_cgm_t = solution.y[5]
         mmetals_ism_t = solution.y[6]
         mhalo_t = solution.y[7]
-
         egy_cgm_t = solution.y[8]  # total cgm energy
 
-        # Rebuild diagnostic cumulative energies from instantaneous rates along
-        # the solved trajectory (instead of integrating them as ODE state vars).
+        # cumulitive energies are tracked here 
+        # evolving through with the rest makes the problem stiffer than it needs to
+        # this integrates them instead of integrating them as ODE state vars
         derived_quantities = []
         for i, time_now in enumerate(adaptive_tsteps):
             state_now = np.array(
@@ -1819,7 +1800,7 @@ class CGMRegulator:
             )
         derived_quantities = np.array(derived_quantities)
 
-        egy_t = e_ism_wind_0.value + scipy.integrate.cumulative_trapezoid(
+        egy_SNE_t = e_ism_wind_0.value + scipy.integrate.cumulative_trapezoid(
             derived_quantities[:, 4], adaptive_tsteps, initial=0.0
         )
         egy_radloss_t = e_cgm_cooling_0.value + scipy.integrate.cumulative_trapezoid(
@@ -1837,7 +1818,7 @@ class CGMRegulator:
         metal_ism_mass = mmetals_ism_t / mgas_t  # ISM metallicity ratio
         metal_ism_mass_sol = metal_ism_mass / self.Z_sol
 
-        # BH
+        # BH -- in constructuoin
         # mbh = solution.y[12]
         # e_bh = solution.y[13]
 
@@ -1870,7 +1851,7 @@ class CGMRegulator:
         self.ode_results["m_metals_cgm"] = mmetals_cgm_t
         self.ode_results["m_metals_ism"] = mmetals_ism_t
         self.ode_results["m_halo"] = mhalo_t
-        self.ode_results["egy_ism_wind"] = egy_t
+        self.ode_results["egy_ism_wind"] = egy_SNE_t
         self.ode_results["egy_radloss"] = egy_radloss_t
         self.ode_results["egy_eject"] = egy_eject_t
         self.ode_results["egy_cgm_in"] = egy_cgm_in_t
@@ -1895,12 +1876,10 @@ class CGMRegulator:
 
     def get_derived_quantities(self):
         """get either some of the derived quantities or derivatives
-
+         # the differnce between this and the one above is that this is dynamically updated, while the resulsta are from IVP
         Returns:
             dict: A dictionary containing the derived quantities or derivatives.
         """
-
-        # the differnce between this and the one above is that this is dynamically updated, while the resulsta are from IVP
 
         ## we can calculate the derived quantities from the results
         t = self.ode_results["t"]
@@ -1925,7 +1904,6 @@ class CGMRegulator:
             ]
         ).T
 
-        # print(mgas_and_energy_array.shape)
         derived_quantities = []
         for i, time in enumerate(t):
             derived_quantities.append(
@@ -2315,7 +2293,7 @@ def halo_timescales(results, derived_quant, title: str):
     mcgm_cold_t = results["m_cgm_cold"]
     mmetals_t = results["m_metals_cgm"]
     mhalo_t = results["m_halo"]
-    egy_t = results["egy_ism_wind"]
+    egy_SNE_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
     egy_cgm_in_t = results["egy_cgm_in"]
@@ -2506,7 +2484,7 @@ def halo_normalized_rates(results, derived_quant, title: str):
     mcgm_cold_t = results["m_cgm_cold"]
     mmetals_t = results["m_metals_cgm"]
     mhalo_t = results["m_halo"]
-    egy_t = results["egy_ism_wind"]
+    egy_SNE_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
     egy_cgm_in_t = results["egy_cgm_in"]
@@ -2697,7 +2675,7 @@ def halo_detailed_energy_and_mass_plots(results, derived_quant, title: str):
     mcgm_cold_t = results["m_cgm_cold"]
     mmetals_t = results["m_metals_cgm"]
     mhalo_t = results["m_halo"]
-    egy_t = results["egy_ism_wind"]
+    egy_SNE_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
     egy_cgm_in_t = results["egy_cgm_in"]
@@ -3061,7 +3039,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     mcgm_cold_t = results["m_cgm_cold"]
 
     mhalo_t = results["m_halo"]
-    egy_t = results["egy_ism_wind"]
+    egy_SNE_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
     egy_cgm_in_t = results["egy_cgm_in"]
@@ -3164,7 +3142,7 @@ def halo_diagnostics_v2(results, derived_quant, title: str):
     # the energy evolution
     ax[1].plot(t, egy_bh, label=r"$E_{\rm \bullet, therm}$", color=c_bh, lw=2)
     ax[1].plot(t, egy_eject_t, label=r"$E_{\rm CGM, out}$", color=c_mhalo, lw=2)
-    ax[1].plot(t, egy_t, label=r"$E_{\rm ISM, winds}$", color=c_mstar, lw=2)
+    ax[1].plot(t, egy_SNE_t, label=r"$E_{\rm ISM, winds}$", color=c_mstar, lw=2)
     ax[1].plot(t, egy_cgm_t, label=r"$E_{\rm CGM}$", color=c_mcgm, lw=2)
     ax[1].plot(t, egy_cgm_in_t, label=r"$E_{\rm CGM, accrete}$", color=c_mcgm_hot, lw=2)
     ax[1].plot(
@@ -3376,7 +3354,7 @@ def accretion_rates(results, derived_quant, title: str):
     mcgm_cold_t = results["m_cgm_cold"]
     mmetals_t = results["m_metals_cgm"]
     mhalo_t = results["m_halo"]
-    egy_t = results["egy_ism_wind"]
+    egy_SNE_t = results["egy_ism_wind"]
     egy_radloss_t = results["egy_radloss"]
     egy_eject_t = results["egy_eject"]
     egy_cgm_in_t = results["egy_cgm_in"]

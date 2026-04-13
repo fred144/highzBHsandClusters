@@ -58,8 +58,8 @@ Ob0 = 0.0490
 f_baryon = Ob0 / Omegam0  # universal baryon fraction
 LCDM = cosmology.LambdaCDM(H0=H0, Om0=Omegam0, Ode0=Omegade0)
 
-t_span = (0.15, 0.500)  # Gyr
-f_prevent_floor_to_try = [1e-6, 0.01, 0.1, 0.2, 0.3, 0.5, 0.6, 1.0]
+t_span = (0.15, 1.0)  # Gyr
+f_prevent_floor_to_try = [0.01,  0.2, 0.5, 0.6, 1.0]
 mhalo_0 = 1e12 * u.Msun
 z0_text = r"$M_{\rm halo}(z=0) = 10^{12} ~ {\rm M_\odot}$"
 
@@ -67,8 +67,6 @@ z0_text = r"$M_{\rm halo}(z=0) = 10^{12} ~ {\rm M_\odot}$"
 f_prevent analysis
 """
 
-
-# ===== CALCULATION LOOP =====
 results_list = []
 for idx, f_prevent_floor in enumerate(f_prevent_floor_to_try):
     model_ = CGMRegulator(
@@ -89,6 +87,10 @@ for idx, f_prevent_floor in enumerate(f_prevent_floor_to_try):
         - derived_["dot_e_cgm_out"]
         + derived_["dot_e_ism_wind"]
     )
+    dot_m_cgm_actual =derived_["dot_m_cgm_hot"]
+      
+        
+   
    
     t_dynamical = derived_["t_dynamical"]
     t_cool = derived_["tcool_real"]
@@ -118,6 +120,9 @@ for idx, f_prevent_floor in enumerate(f_prevent_floor_to_try):
             "t_cool": t_cool,
             "t_dep": t_dep_effect,
             "t_ejection": t_ejection,
+            "T_CGM": derived_["cgm_temp"],
+            "T_vir": derived_["halo_vir_temp"],
+            "dot_m_cgm_actual": dot_m_cgm_actual,
         }
     )
 # %% # ===== PLOTTING =====
@@ -292,7 +297,7 @@ ax[0, 0].text(
 )
 
 plt.savefig(
-    "./final_figs/appendix_mass_fprevent.pdf", dpi=200, bbox_inches="tight", pad_inches=0.05
+    "./final_figs/appendix_mass_fprevent_Mhalo{:.2f}.pdf".format(mhalo_0.value), dpi=200, bbox_inches="tight", pad_inches=0.05
 )
 plt.show()
 # %% now do the same for the energy rates, total energy, total energy rate, then breakdown of energy rates
@@ -313,12 +318,13 @@ for axes in ax.flatten():
     axes.grid(which="both", ls="-", lw=0.5, alpha=0.4, zorder=0)    
     
 for i, res in enumerate(results_list):
-    ls = "-" if i % 2 == 0 else "--"
+    # ls = "-" if i % 2 == 0 else "--"
     ax[0, 0].plot(
         res["time_gyr"],
-        res["e_cgm"],
+        # res["e_cgm"],
+        res["T_CGM"],
         color=colors[i],
-        label=res["label"],
+     
         lw=lw,
         alpha=0.7,
         linestyle=ls,
@@ -333,10 +339,11 @@ for i, res in enumerate(results_list):
         alpha=0.7,
         linestyle=ls,
         zorder=2,
+        label=res["label"],
     )
     ax[0, 2].plot(
         res["time_gyr"],
-        res["dot_e_cgm_out"],
+        res["dot_e_cgm_out"]/res["dot_m_cgm_ej"],
         color=colors[i],
         lw=lw,
         alpha=0.7,
@@ -345,7 +352,7 @@ for i, res in enumerate(results_list):
     )
     ax[1, 0].plot(
         res["time_gyr"],
-        res["dot_e_cgm_cooling"],
+        res["dot_e_cgm_cooling"]/res["dot_m_cgm_cooling"],
         color=colors[i],
         lw=lw,
         alpha=0.7,
@@ -354,7 +361,7 @@ for i, res in enumerate(results_list):
     )
     ax[1, 1].plot(
         res["time_gyr"],
-        res["dot_e_cgm_in"],
+        res["dot_e_cgm_in"]/res["dot_m_cgm_in"],
         lw=lw,
         color=colors[i],
         alpha=0.7,
@@ -363,7 +370,7 @@ for i, res in enumerate(results_list):
     )
     ax[1, 2].plot(
         res["time_gyr"],
-        res["dot_e_ism_wind"],
+        res["dot_e_ism_wind"]/res["dot_m_sne_wind"],
         lw=lw,
         color=colors[i],
         alpha=0.7,
@@ -371,53 +378,83 @@ for i, res in enumerate(results_list):
         zorder=2,
     )   
     ax[2, 0].plot(res["time_gyr"], res["t_cool"], lw=lw, color=colors[i], alpha=0.7, linestyle=ls, zorder=2)
-    ax[2, 1].plot(res["time_gyr"], res["t_dep"], lw=lw, color=colors[i], alpha=0.7, linestyle=ls, zorder=2)
-    ax[2, 2].plot(res["time_gyr"], res["t_ejection"], lw=lw, color=colors[i], alpha=0.7, linestyle=ls, zorder=2)
+    
+    # ax[2, 1].plot(res["time_gyr"], res["dot_e_cgm_in"], lw=lw, color=colors[i], alpha=0.7, linestyle=ls, zorder=2)
+    ax[2, 1].plot(res["time_gyr"], res["dot_m_cgm_in"], lw=lw, color=colors[i], alpha=0.7, linestyle=ls, zorder=2)
+    
+    
+    
+    
+    # ax[2, 1].plot(res["time_gyr"], res["t_dep"], lw=lw, color=colors[i], alpha=0.7, linestyle=ls, zorder=2)
+    ax[2, 2].plot(res["time_gyr"],  res["t_dep"],  lw=lw, color=colors[i], alpha=0.7, linestyle=ls, zorder=2)
     
 # add the free fall time / dynamical time to the timescale plots
-for i in range (3):
-    ax[2, i].plot(res["time_gyr"], res["t_dynamical"], lw=3, color="k", alpha=1, linestyle=":", zorder=2, label=r"$t_{\rm ff}$")
+
+ax[2, 0].plot(res["time_gyr"], res["t_dynamical"], lw=3, color="k", alpha=1, linestyle=":", zorder=2, label=r"$t_{\rm ff}$")
+ax[2, 2].plot(res["time_gyr"], res["t_dynamical"], lw=3, color="k", alpha=1, linestyle=":", zorder=2, label=r"$t_{\rm ff}$")
 
 ax[2, 0].legend(frameon=False, fontsize=11, loc="lower right")
 
     
-ax[0, 0].set(yscale="log", ylabel=r"$E_{\rm CGM}$ [erg]", ylim=(1e52, 1e57))
+ax[0, 0].set(yscale="log", ylabel=r"$T_{\rm CGM}$ [K]",ylim=(3e4, 1e7))
+# overplot th Tvir
+ax[0, 0].plot(res["time_gyr"], res["T_vir"], lw=3, color="k", alpha=1, linestyle="--", zorder=2, label=r"$T_{\rm vir}$")
+ax[0, 0].legend(frameon=False, fontsize=11, loc="lower right")
 ax[0, 1].set(
     ylabel=r"$\dot{E}_{\rm CGM}$" + r" [erg Gyr$^{-1}$]",
     yscale="log",
-    ylim=(1e53, 1e58),
+    # ylim=(5e45, 3e48),
 )
 ax[0, 2].set(
-    ylabel=r"$\dot{E}_{\rm CGM, out}$" + r" [erg Gyr$^{-1}$]",
+    ylabel=r"$\dot{E}_{\rm ej} / \dot{M}_{\rm ej}$" + r" [erg M$_{\odot}^{-1}$]",
     yscale="log",
-    ylim=(1e53, 1e58),
+    ylim=(5e45, 2e49),
+  
 )
 ax[1, 0].set(
-    ylabel=r"$\dot{E}_{\rm CGM, cooling}$" + r" [erg Gyr$^{-1}$]",
+    ylabel=r"$\dot{E}_{\rm  cooling} / \dot{M}_{\rm cooling}$" + r" [erg M$_{\odot}^{-1}$]",
     yscale="log",
-    ylim=(1e53, 1e58),
+    ylim=(5e45, 2e49),
+  
   
 )
 ax[1, 1].set(
-    ylabel=r"$\dot{E}_{\rm CGM, in}$" + r" [erg Gyr$^{-1}$]",
+    ylabel=r"$\dot{E}_{\rm in} / \dot{M}_{\rm  in}$" + r" [erg M$_{\odot}^{-1}$]",
     yscale="log",
-    ylim=(1e53, 1e58),
+    ylim=(5e45, 2e49),
+   
   
 )
 ax[1, 2].set(
-    ylabel=r"$\dot{E}_{\rm ISM, wind}$" + r" [erg Gyr$^{-1}$]",
+    ylabel=r"$\dot{E}_{\rm ISM, wind} / \dot{M}_{\rm ISM, wind}$" + r" [erg M$_{\odot}^{-1}$]",
     yscale="log",
-    ylim=(1e53, 1e58),
+     ylim=(5e45, 2e49),
+    
    
 )   
 
-z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
+# choose the redshift ticks you want to draw (edit this list)
+z_tick = [20, 12, 8, 7,6, 5, 4]
+
+# convert chosen z ticks to cosmic-time positions
+t_ticks = np.array([LCDM.age(z).to_value(u.Gyr) for z in z_tick])
+z_tick = np.array(z_tick)
+
+# keep only ticks inside the plotted time range
+mask = (t_ticks >= t_span[0]) & (t_ticks <= t_span[1])
+t_ticks = t_ticks[mask]
+z_tick = z_tick[mask]
+
+# ensure x positions are in increasing order
+order = np.argsort(t_ticks)
+t_ticks = t_ticks[order]
+z_tick = z_tick[order]
+
 for col in range(3):
     ax2 = ax[0, col].twiny()
-    ax2.set_xlim(t_span)
     ax2.set_xlim(ax[0, col].get_xlim())
     ax2.set_xticks(t_ticks)
-    ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
+    ax2.set_xticklabels([f"{z:.1f}" for z in z_tick])
     ax2.set_xlabel(r"$z$", labelpad=8)
     ax2.minorticks_off()
     ax[0, col].minorticks_on()
@@ -427,25 +464,25 @@ for axes in ax.flatten():
         line.set_zorder(1)
         
         
-ax[0, 0].legend(
+ax[0, 1].legend(
     frameon=False,
     ncols=8,
-    fontsize=9,
-    title=r"$f_{\mathrm{prevent}} \rm ~floor$",
-    loc="lower left",
-    bbox_to_anchor=(0.75, 1.15),
+    
+    title=r"$f_{\mathrm{prevent,~floor}}$",
+    loc="lower center",
+    bbox_to_anchor=(0.5, 1.15),
     title_fontsize=10,
 )
 # add anotation for z0 halo mass
 ax[0, 0].text(
     0.95,
-    0.05,
+    0.95,
     z0_text,
     transform=ax[0, 0].transAxes,
     fontsize=10,
     bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="white", lw=1),
     ha="right",
-    va="bottom",
+    va="top",
 )
 
 # add axis labels
@@ -469,11 +506,11 @@ ax[2, 0].set(
     xlabel=r"$t_{\rm univ}$ [Gyr]",
     xlim=t_span,
 )
-ax[2, 1].set(ylabel=r"$t_{\rm dep, eff}$ [Gyr]", yscale="log", ylim=(5e-4, 0.9), xlabel=r"$t_{\rm univ}$ [Gyr]",)
-ax[2, 2].set(ylabel=r"$t_{\rm eject}$ [Gyr]", yscale="log", ylim=(5e-4, 0.9), xlabel=r"$t_{\rm univ}$ [Gyr]",)
+ax[2, 1].set(ylabel=r"$\dot{M}_{\rm in}$ [M$_{\odot}$ Gyr$^{-1}$]", yscale="log", xlabel=r"$t_{\rm univ}$ [Gyr]",)
+ax[2, 2].set(ylabel=r"$t_{\rm dep, eff}$ [Gyr]", yscale="log", xlabel=r"$t_{\rm univ}$ [Gyr]",  ylim=(5e-4, 0.9))
 
 plt.savefig(
-    "./final_figs/appendix_energy_fprevent.pdf", dpi=200, bbox_inches="tight", pad_inches=0.05
+    "./final_figs/appendix_energy_fprevent_Mhalo{:.2e}.pdf".format(mhalo_0.value), dpi=200, bbox_inches="tight", pad_inches=0.05
 )
 plt.show()
 # %%

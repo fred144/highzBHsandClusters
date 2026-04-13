@@ -294,7 +294,7 @@ ax[1, 0].set(
     # ylabel=r"$M_{\mathrm{CGM,cold}} / M_{\mathrm{CGM}}$",
     ylabel=r"${\rm CGM~ mass~ fraction }$",
     xlim=(1e10, 9.5e12),
-    ylim=(-0.1, 0.75),
+    ylim=(-0.1, 0.8),
 )
 ax[1, 1].set(
     xscale="log",
@@ -488,11 +488,11 @@ marvels_mcgmwarm = 10**df["M_Warm_CGM"].values
 ax[1, 1].legend(
     frameon=False,
     loc="lower center",
-    fontsize=11,
+    fontsize=9,
     ncol=9,
     title=r"$z$",
     bbox_to_anchor=(-0.1, 3.1),
-    handletextpad=0.3,
+    # handletextpad=0.3,
 )
 ax[0, 1].legend(frameon=False, loc="lower right", fontsize=10, ncol=1, handletextpad=0.1, columnspacing=0.5)
 # rescale legend markers

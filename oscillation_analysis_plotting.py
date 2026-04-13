@@ -288,7 +288,7 @@ con2 = ConnectionPatch(
 )
 ax[0].figure.add_artist(con2)
 
-# --- Draw rectangle only, hide default connectors ---
+# --- draw rectangle only, hide default connectors ---
 artists = mark_inset(ax[0], ax[4], loc1=2, loc2=4, fc="none", color="k", zorder=10)
 for line in artists[1:]:
     line.set_alpha(0.0)
@@ -309,7 +309,7 @@ ax[6].plot(
     dot_m_cgm_ej,
     lw=2,
     ls="--",
-    label=r"$\dot{M}_{\rm CGM, ej}$",
+    label=r"$\dot{M}_{\rm ej}$",
     color=blu2,
 )
 ax[6].plot(
@@ -317,7 +317,7 @@ ax[6].plot(
     dot_cgm_falling,
     lw=2,
     ls="--",
-    label=r"$\dot{M}_{\rm CGM, falling}$",
+    label=r"$\dot{M}_{\rm falling}$",
     color="y",
 )
 
@@ -325,7 +325,7 @@ ax[6].plot(
     results_2phase["t"],
     dot_m_cgm_in,
     lw=2,
-    label=r"$\dot{M}_{\rm CGM, in}$",
+    label=r"$\dot{M}_{\rm in}$",
     color=red1,
 )
 ax[6].plot(
@@ -348,11 +348,11 @@ ax[6].plot(
     dot_m_cgm_cooling,
     lw=2,
     ls="-",
-    label=r"$\dot{M}_{\rm CGM, cooling}$",
+    label=r"$\dot{M}_{\rm cooling}$",
     color=blu1,
 )
 ax[6].legend(
-    frameon=False, ncol=3, fontsize=10, loc="lower right", bbox_to_anchor=(1.1, -0.6)
+    frameon=False, ncol=3, fontsize=10, loc="lower center", bbox_to_anchor=(0.5, -0.6)
 )
 
 ax[6].text(
@@ -392,7 +392,7 @@ ax[7].plot(
     dot_e_cgm_acc,
     color=red1,
     lw=2,
-    label=r"$\dot{E}_{\rm CGM, in}$",
+    label=r"$\dot{E}_{\rm in}$",
 )
 ax[7].plot(
     results_2phase["t"],
@@ -407,7 +407,7 @@ ax[7].plot(
     color=blu2,
     lw=2,
     ls="--",
-    label=r"$\dot{E}_{\rm CGM, ej}$",
+    label=r"$\dot{E}_{\rm ej}$",
 )
 ax[7].plot(
     results_2phase["t"],
@@ -415,7 +415,7 @@ ax[7].plot(
     color=blu1,
     ls="--",
     lw=2,
-    label=r"$\dot{E}_{\rm CGM, cooling}$",
+    label=r"$\dot{E}_{\rm cooling}$",
 )
 ax[7].set(
     ylabel=r"energy rates $[{\rm erg\: Gyr^{-1}}]$",
@@ -546,7 +546,7 @@ ax0.plot(
     results_2Phase_long["z"],
     dot_m_cgm_ej,
     lw=2,
-    label=r"$\dot{M}_{\rm CGM, ej}$",
+    label=r"$\dot{M}_{\rm ej}$",
     color=blu2,
     ls="--",
 )
@@ -554,7 +554,7 @@ ax0.plot(
     results_2Phase_long["z"],
     dot_cgm_falling,
     lw=2,
-    label=r"$\dot{M}_{\rm CGM, falling}$",
+    label=r"$\dot{M}_{\rm falling}$",
     color="y",
     ls="--",
 )
@@ -562,7 +562,7 @@ ax0.plot(
     results_2Phase_long["z"],
     dot_m_cgm_cooling,
     lw=2,
-    label=r"$\dot{M}_{\rm CGM, cooling}$",
+    label=r"$\dot{M}_{\rm cooling}$",
     color=blu1,
     ls="-",
 )
@@ -571,7 +571,7 @@ ax0.plot(
     dot_m_cgm_in,
     ls="-",
     lw=2,
-    label=r"$\dot{M}_{\rm CGM, in}$",
+    label=r"$\dot{M}_{\rm in}$",
     color=red1,
 )
 ax0.plot(
@@ -614,7 +614,7 @@ ax1.plot(
     dot_e_cgm_ej,
     color=blu2,
     lw=2,
-    label=r"$\dot{E}_{\rm CGM, ej}$",
+    label=r"$\dot{E}_{\rm  ej}$",
     ls="--",
 )
 ax1.plot(
@@ -622,7 +622,7 @@ ax1.plot(
     dot_e_cgm_cool,
     color=blu1,
     lw=2,
-    label=r"$\dot{E}_{\rm CGM, cooling}$",
+    label=r"$\dot{E}_{\rm  cooling}$",
     ls="--",
 )
 ax1.plot(
@@ -631,7 +631,7 @@ ax1.plot(
     color=red1,
     ls="--",
     lw=2,
-    label=r"$\dot{E}_{\rm CGM, in}$",
+    label=r"$\dot{E}_{\rm  in}$",
 )
 ax1.plot(
     results_2Phase_long["z"],
@@ -665,7 +665,7 @@ ax[0].plot(
     results_2phase["t"],
     dot_m_cgm_ej,
     lw=3,
-    label=r"$\dot{M}_{\rm CGM, ej}$",
+    label=r"$\dot{M}_{\rm ej}$",
     color=blu2,
     ls="--",
 )
@@ -673,7 +673,7 @@ ax[0].plot(
     results_2phase["t"],
     dot_cgm_falling,
     lw=3,
-    label=r"$\dot{M}_{\rm CGM, falling}$",
+    label=r"$\dot{M}_{\rm falling}$",
     color="y",
     ls="--",
 )
@@ -681,7 +681,7 @@ ax[0].plot(
     results_2phase["t"],
     dot_m_cgm_cooling,
     lw=3,
-    label=r"$\dot{M}_{\rm CGM, cooling}$",
+    label=r"$\dot{M}_{\rm cooling}$",
     color=blu1,
     ls="-",
 )
@@ -690,7 +690,7 @@ ax[0].plot(
     dot_m_cgm_in,
     ls="-",
     lw=3,
-    label=r"$\dot{M}_{\rm CGM, in}$",
+    label=r"$\dot{M}_{\rm in}$",
     color=red1,
 )
 ax[0].plot(
@@ -739,7 +739,7 @@ ax[1].plot(
     dot_e_cgm_ej,
     color=blu2,
     lw=3,
-    label=r"$\dot{E}_{\rm CGM, ej}$",
+    label=r"$\dot{E}_{\rm ej}$",
     ls="--",
 )
 ax[1].plot(
@@ -747,7 +747,7 @@ ax[1].plot(
     dot_e_cgm_cool,
     color=blu1,
     lw=3,
-    label=r"$\dot{E}_{\rm CGM, cooling}$",
+    label=r"$\dot{E}_{\rm cooling}$",
     ls="--",
 )
 ax[1].plot(
@@ -756,7 +756,7 @@ ax[1].plot(
     color=red1,
     ls="-",
     lw=3,
-    label=r"$\dot{E}_{\rm CGM, in}$",
+    label=r"$\dot{E}_{\rm in}$",
 )
 ax[1].plot(
     results_2phase["t"],
