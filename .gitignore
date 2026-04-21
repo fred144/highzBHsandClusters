@@ -1,5 +1,4 @@
 runs/
-data/*.gz
-data/*.hdf5
 __pycache__/*
 .vscode/*
+data/

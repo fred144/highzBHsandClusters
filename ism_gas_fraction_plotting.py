@@ -721,7 +721,7 @@ print(mhalos[0])
 n_sfr = 1.8
 r_disk_sfr = 0.018
 kappa_sfr = 0.02
-eta_Z = 0.70
+eta_Z = 0.60
 alpha_E = 0.1
 alpha_M = 0.1
 param_txt = (
@@ -734,8 +734,8 @@ param_txt = (
 )
 
 
-file = "./runs/redshift_scan_" f"{param_txt}.h5"
-file="./runs/smhm_2phase_redshift_scan_redshift_scan_KS_1998_16bins_Radau_0p02_n1p8_r0p018_etaZ0p7.h5"
+# file = "./runs/redshift_scan_" f"{param_txt}.h5"
+file="./runs/smhm_2phase_redshift_scan_redshift_scan_KS_1998_16bins_Radau_0p02_n1p8_r0p018_etaZ0p60.h5"
 ####
 
 if not os.path.exists(file):
@@ -1322,7 +1322,7 @@ fig2, ax2 = plt.subplots(figsize=(4.5, 4), dpi=300)
 
 for i, z in enumerate(zs):
     metallicity = (mmetal_ism[i] / mism[i]) 
-    metsallicity_zsun =  metallicity / z_sun
+    metallicity_zsun =  metallicity / z_sun
     twelv_log_oh = Zsun_to_twelve_log_oh(metallicity_zsun)
     # ax2.plot(
     #     mstar[i],

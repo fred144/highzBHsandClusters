@@ -247,10 +247,9 @@ for mhalo in halo_masses:
     dot_e_minus = dot_e_cgm_cooling + dot_e_cgm_cooling
     # metal evolution
     m_metals = results_2phase["m_metals_cgm"]
-    cgm_metallicity = m_metals / (
-        results_2phase["m_cgm"] + results_2phase["m_cgm"]
-    )
+    cgm_metallicity = m_metals / results_2phase["m_cgm"]
     cgm_Z_sun = cgm_metallicity / 0.0134
+    ism_Z_sun = (results_2phase["m_metals_ism"] / results_2phase["m_ism"]) / 0.0134
 
     halo_results.append(
         {
@@ -270,6 +269,7 @@ for mhalo in halo_masses:
             "dot_e_cgm_cooling": dot_e_cgm_cooling,
             "dot_e_ism_wind": dot_e_ism_wind,
             "cgm_Z_sun": cgm_Z_sun,
+            "ism_Z_sun": ism_Z_sun,
         }
     )
 # %% results for each halo mass for the baseline model
@@ -384,7 +384,7 @@ ax[4].set(
     yscale="log",
     xscale="log",
     xlim=(halo_results[0]["sim_time_2"][0], 2),
-    ylabel=r"$t_{\mathrm{ejection}}/t_{\mathrm{cool}}$",
+    ylabel=r"$t_{\mathrm{ej}}/t_{\mathrm{cool}}$",
     ylim=(2e-3, 500),
     xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
 )
@@ -429,7 +429,7 @@ ax[5].set(
     yscale="log",
     xscale="log",
     xlim=(halo_results_baseline[0]["sim_time"][0] * 0.8, 5),
-    ylabel=r"$t_{\mathrm{ejection}}/t_{\mathrm{cool, eff}}$",
+    ylabel=r"$t_{\mathrm{ej}}/t_{\mathrm{cool, eff}}$",
     ylim=(0.1, 2),
     xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
 )
@@ -510,7 +510,7 @@ plt.savefig(
 plt.show()
 
 # %% density and temperature of CGM
-fig, ax = plt.subplots(4, 2, dpi=300, figsize=(4.25, 8.5), sharex="col", sharey="row")
+fig, ax = plt.subplots(5, 2, dpi=300, figsize=(4.25, 9.5), sharex="col", sharey="row")
 ax = ax.flatten()
 plt.subplots_adjust(hspace=0.065, wspace=0.1)
 
@@ -521,6 +521,7 @@ for res in halo_results:
     t_cgm = res["cgm_temp"]
     rho0 = res["rho0"]
     Z_sun = res["cgm_Z_sun"]
+    Z_sun_ism = res["ism_Z_sun"]
 
     # First row: CGM temperature
     ax[0].plot(times, t_cgm, color=color)
@@ -531,12 +532,16 @@ for res in halo_results:
     ax[3].plot(times, t_vir, color=color)
 
     # third row: rho0
-    ax[4].plot(times, rho0, color=color)
-    ax[5].plot(times, rho0, color=color)
+    ax[4].plot(times, np.log10(rho0), color=color)
+    ax[5].plot(times, np.log10(rho0), color=color)
 
     # fourth row: Zsun
     ax[6].plot(times, Z_sun, color=color)
     ax[7].plot(times, Z_sun, color=color)
+    
+    # fifth row: Zsun_ism
+    ax[8].plot(times, Z_sun_ism, color=color)
+    ax[9].plot(times, Z_sun_ism, color=color)
 
     # ax[5].set(yscale="log", xlim=(8.05, 13))
 ax[0].set(
@@ -549,20 +554,28 @@ ax[2].set(yscale="log", xlim=(0.05, 1.05), ylabel=r"$T_{\rm vir}$ [K]", ylim=(2e
 ax[3].set(yscale="log", xlim=(8.05, 13), ylim=(2e4, 1e7))
 
 ax[4].set(
-    yscale="log",
-    xlim=(0.05, 1.05),
-    ylabel=r"$\rho_{\rm 0,hot} ~ [{\rm M_\odot ~kpc^{-3}}]$",
+    # yscale="log",
+    xlim=(0.01, 1.05),
+    ylabel=r"$\log \rho_{\rm 0,hot} ~ [{\rm M_\odot ~kpc^{-3}}]$",
+    # ylim=(200, 1e7),
+    ylim=(2, 7.5)
 )
-ax[5].set(yscale="log", xlim=(8.05, 13), ylim=(200, 3e7))
+
+ax[5].set(xlim=(8.05, 13))
+
 ax[6].set(yscale="log", xlim=(0.05, 1.05), ylabel=r"$Z_{\rm CGM} [{\rm Z_{\odot}}]$")
 
+ax[7].set(yscale="log", xlim=(8.05, 13), ylim=(1e-3, 5))
+ax[8].set(yscale="log", xlim=(0.05, 1.05), ylabel=r"$Z_{\rm ISM} [{\rm Z_{\odot}}]$")
+ax[9].set(yscale="log", xlim=(8.05, 13), ylim=(1e-3, 5))
 
+# 0.14, 0.3, 0.5, 1, 2, 3, 5
 # Add twin redshift axis for the top row of plots (indices 0 and 1)
-ticks = [np.array([0.15, 0.4, 0.8]), np.array([8.5, 10, 12, 13])]
+ticks = [np.array([0.14, 0.4, 0.6, 1]), np.array([8.5, 10, 12, 13])]
 for i in [0, 1]:
     z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in ticks[i]]
     ax2 = ax[i].twiny()
-    ax2.set_xscale("log")
+    
     ax2.set_xlim(ax[i].get_xlim())
     ax2.set_xticks(ticks[i])
     ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
@@ -572,10 +585,10 @@ for i in [0, 1]:
     ax[i].minorticks_on()
 
 # turn off right ticks and spines for the left column and the same with the left spines for the right column
-for i in [0, 2, 4, 6]:
+for i in [0, 2, 4, 6, 8]:
     ax[i].yaxis.tick_left()
     ax[i].spines["right"].set_visible(False)
-for i in [1, 3, 5, 7]:
+for i in [1, 3, 5, 7, 9]:
     ax[i].yaxis.tick_right()
     ax[i].spines["left"].set_visible(False)
 
@@ -593,13 +606,15 @@ ax[0].plot([1, 1], [1, 0], transform=ax[0].transAxes, **kwargs)
 ax[2].plot([1, 1], [1, 0], transform=ax[2].transAxes, **kwargs)
 ax[4].plot([1, 1], [1, 0], transform=ax[4].transAxes, **kwargs)
 ax[6].plot([1, 1], [1, 0], transform=ax[6].transAxes, **kwargs)
+ax[8].plot([1, 1], [1, 0], transform=ax[8].transAxes, **kwargs)
 
 ax[1].plot([0, 0], [1, 0], transform=ax[1].transAxes, **kwargs)
 ax[3].plot([0, 0], [1, 0], transform=ax[3].transAxes, **kwargs)
 ax[5].plot([0, 0], [1, 0], transform=ax[5].transAxes, **kwargs)
 ax[7].plot([0, 0], [1, 0], transform=ax[7].transAxes, **kwargs)
+ax[9].plot([0, 0], [1, 0], transform=ax[9].transAxes, **kwargs)
 # Add colorbar for halo mass (log scale) on the right using inset axes
-cbar_ax = ax[1].inset_axes([-0.25, 0.3, 1, 0.06], zorder=10)  # [x, y, width, height]
+cbar_ax = ax[1].inset_axes([-0.25, 0.35, 1, 0.06], zorder=10)  # [x, y, width, height]
 cbar = plt.colorbar(sm, cax=cbar_ax, orientation="horizontal")
 cbar.set_label(r"$M_{\rm halo} (z=0) \ [M_\odot]$")
 
@@ -610,7 +625,7 @@ fig.text(
     r"$t_{\rm univ}$ [Gyr]",
     ha="center",
     va="top",
-    transform=ax[6].transAxes,
+    transform=ax[8].transAxes,
 )
 fig.text(1, 1.2, r"$z$", ha="left", va="top", transform=ax[0].transAxes)
 for axes in ax:
@@ -822,17 +837,20 @@ cbar.set_ticks(halo_masses.value)
 cbar.ax.set_xscale("log")
 
 
-# t_ticks = np.array([0.14, 0.3, 0.5, 1, 2, 3, 5])
-# z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
-# ax2 = ax[0, 0].twiny()
-# ax2.set_xscale("log")
-# ax2.set_xlim(ax[0, 0].get_xlim())
-# ax2.set_xticks(t_ticks)
-# ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
-# ax2.set_xlabel(r"$z$", labelpad=8)
-# ax2.minorticks_off()
-# ax[0, 0].minorticks_on()
+t_ticks = np.array([0.14, 0.3, 0.5, 1, 2, 3, 5])
+z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
+ax2 = ax[0].twiny()
+ax2.set_xscale("log")
+ax2.set_xlim(ax[0].get_xlim())
+ax2.set_xticks(t_ticks)
+ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
+ax2.set_xlabel(r"$z$", labelpad=8)
+ax2.minorticks_off()
+ax[0].minorticks_on()
 
+# grid
+for axes in ax.flatten() if PLOT_TWO_PANEL else ax:
+    axes.grid(True, which="both", ls="-", lw=0.5, alpha=0.5, zorder=0)
 
 plt.savefig(
     "./final_figs/fig_7_dotE_contribution_ratios.pdf",
