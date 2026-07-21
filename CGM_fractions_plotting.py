@@ -276,7 +276,7 @@ ax[0, 0].set(
     xscale="log",
     yscale="log",
     # xlabel=r"$M_{\mathrm{halo}}$ [M$_{\odot}$]",
-    ylabel=r"$M_{\mathrm{CGM,cold}}$ [M$_{\odot}$]",
+    ylabel=r"$M_{\mathrm{CGM,cool}}$ [M$_{\odot}$]",
     xlim=(1e10, 9.5e12),
     ylim=(2e5, 2e11),
 )

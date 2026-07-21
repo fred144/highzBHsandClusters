@@ -851,7 +851,7 @@ class CGMRegulator:
         mhalo_z0,
         time_interval,
         tstep=1,
-        eta_z=0.7,
+        eta_z=0.6,
         verbose=False,
         dep_time_norm=0.4,
         cooling_dynamic_time_norm=1,
@@ -873,7 +873,7 @@ class CGMRegulator:
         KS_parametrization="KS1998",
         cooling_tables="SutherlandDopita93",
         eta_E_scaling_with_Z=None,
-        TEST_tej_Tvir_definition=False,
+        TEST_tej_Tvir_definition=False,     # this is just from a test
         # ep_bh_radeff=0.1,                 # BH things not currently being used
         # ep_bh_feedback_eff=0.02,
         # bondi_boost=100,
@@ -1197,11 +1197,12 @@ class CGMRegulator:
         ### ejection timescale and limits
         if self.TEST_tej_Tvir_definition is True:
             ## here we use virial temperature to define a virial energy to define a
+            ## sound speed and thus an ejection time, to test the impact of this assumption
             c_sound_cm_s_Tvir = np.sqrt(kb_erg_per_K * halo_vir_temp_K / mu_g)
             c_sound_cm_s = c_sound_cm_s_Tvir
         else:
             # compute sound speed from e_per_mass (erg/g) -> cm/s
-            c_sound_cm_s = np.sqrt(max(e_per_mass_erg_per_g, 0.0))
+            c_sound_cm_s = np.sqrt(max(e_per_mass_erg_per_g, 0.0)) # usual definition
             # c_sound_kms = c_sound_cm_s / cm_per_km
 
         # t_ejection = rvir / c_sound (in seconds -> Gyr)

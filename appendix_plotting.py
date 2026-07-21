@@ -224,7 +224,7 @@ for i, res in enumerate(results_list):
     )
 
 ax[0, 0].set(yscale="log", ylabel=r"Stellar Mass [M$_{\odot}$]", ylim=(1e5, 1e8))
-ax[0, 1].set(ylabel=r"CGM Cold Mass [M$_{\odot}$]", yscale="log", ylim=(1e5, 1e8))
+ax[0, 1].set(ylabel=r"CGM Cool Mass [M$_{\odot}$]", yscale="log", ylim=(1e5, 1e8))
 ax[0, 2].set(ylabel=r"CGM Hot Mass [M$_{\odot}$]", yscale="log", ylim=(1e5, 1e8))
 ax[0, 3].set(
     ylabel=r"$\dot{M}_{\rm CGM, ej} ~ {[ \rm M_\odot ~ yr^{-1}] }$",
@@ -236,27 +236,27 @@ ax[1, 0].set(
     ylabel=r"$\dot{M}_{\rm CGM, falling}~ {[ \rm M_\odot ~ yr^{-1}] }$",
     yscale="log",
     ylim=(3e5, 7e9),
-    xlabel=r"$t_{\rm univ}$ [Gyr]",
+    xlabel=r"$t$ [Gyr]",
 )
 ax[1, 1].set(
     ylabel=r"$\dot{M}_{\rm CGM, in}~ {[ \rm M_\odot ~ yr^{-1}] }$",
     yscale="log",
     ylim=(3e5, 7e9),
-    xlabel=r"$t_{\rm univ}$ [Gyr]",
+    xlabel=r"$t$ [Gyr]",
 )
 ax[1, 2].set(
     ylabel=r"$\dot{M}_{\rm SNe, wind}~ {[ \rm M_\odot ~ yr^{-1}] }$",
     yscale="log",
     ylim=(3e5, 7e9),
-    xlabel=r"$t_{\rm univ}$ [Gyr]",
+    xlabel=r"$t$ [Gyr]",
 )
 ax[1, 3].set(
     ylabel=r"$\dot{M}_{\rm CGM, cooling}~ {[ \rm M_\odot ~ yr^{-1}] }$",
     yscale="log",
     ylim=(3e5, 7e9),
     xlim=t_span,
-    xlabel=r"$t_{\rm univ}$ [Gyr]",
-)
+    xlabel=r"$t$ [Gyr]",
+) 
 
 t_ticks = np.array([t_span[0], 0.22, 0.3, 0.4, t_span[1]])
 z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
@@ -503,11 +503,11 @@ ax[2, 0].set(
     ylabel=r"$t_{\rm cool}$ [Gyr]",
     yscale="log",
     ylim=(5e-4, 0.9),
-    xlabel=r"$t_{\rm univ}$ [Gyr]",
+    xlabel=r"$t$ [Gyr]",
     xlim=t_span,
 )
-ax[2, 1].set(ylabel=r"$\dot{M}_{\rm in}$ [M$_{\odot}$ Gyr$^{-1}$]", yscale="log", xlabel=r"$t_{\rm univ}$ [Gyr]",)
-ax[2, 2].set(ylabel=r"$t_{\rm dep, eff}$ [Gyr]", yscale="log", xlabel=r"$t_{\rm univ}$ [Gyr]",  ylim=(5e-4, 0.9))
+ax[2, 1].set(ylabel=r"$\dot{M}_{\rm in}$ [M$_{\odot}$ Gyr$^{-1}$]", yscale="log", xlabel=r"$t$ [Gyr]",)
+ax[2, 2].set(ylabel=r"$t_{\rm dep, eff}$ [Gyr]", yscale="log", xlabel=r"$t$ [Gyr]",  ylim=(5e-4, 0.9))
 
 plt.savefig(
     "./final_figs/appendix_energy_fprevent_Mhalo{:.2e}.pdf".format(mhalo_0.value), dpi=200, bbox_inches="tight", pad_inches=0.05

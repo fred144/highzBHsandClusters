@@ -86,7 +86,7 @@ model_2phase = CGMRegulator(
     disk_scale_length=0.018,
     KS_parametrization="KS1998",
     TEST_tej_Tvir_definition=False,
-    eta_z=0.7,
+    eta_z=0.6,
     alpha_e=0.1,
     alpha_m=0.1,
 )
@@ -101,8 +101,8 @@ color_cgm = "dodgerblue"
 color_baseline = cmap(0)
 color_latest = cmap(1)
 
-fig, ax = plt.subplots(1, 1, figsize=(5, 4), dpi=300, sharex=True)
-plt.subplots_adjust(hspace=0.1)
+fig, ax = plt.subplots(1, 2, figsize=(5, 3), dpi=300, sharex=True, sharey=True)
+plt.subplots_adjust(hspace=0.05, wspace=0.04)
 
 # --- Top panel: Baseline model timescales ---
 t_cool = derived_baseline["tcool_real"]
@@ -114,16 +114,11 @@ sim_time = derived_baseline["sim_time"]
 
 # ax[0].plot(sim_time, t_cool,|lw=3, color=color_cgm, label=r"$t_{\mathrm{cool}}$")
 
-ax.plot(
-    sim_time,
-    t_cool_eff,
-    lw=3,
-    color=color_cgm,
-    label=r"$t_{\mathrm{cool,eff}}$",
-    alpha=0.6,
+ax[1].plot(sim_time, t_cool_eff, lw=3, color=color_cgm, alpha=0.6, label=r"$t_{\mathrm{cool, eff}}$")
+ax[1].plot(
+    sim_time, t_dep, lw=3, color=color_star, label=r"$t_{\mathrm{dep}}$", alpha=0.6
 )
-ax.plot(sim_time, t_dep, lw=3, color=color_star, label=r"$t_{\mathrm{dep}}$", alpha=0.6)
-ax.plot(
+ax[1].plot(
     sim_time,
     t_ejection,
     lw=3,
@@ -133,8 +128,8 @@ ax.plot(
     alpha=1,
 )
 
-ax.plot(
-    sim_time, t_dynamical, lw=3, color="grey", label=r"$t_{\mathrm{ff}}$", alpha=0.6
+ax[1].plot(
+    sim_time, t_dynamical, lw=3, color="grey", alpha=0.6
 )
 # ax[0].set(
 #     yscale="log",
@@ -146,19 +141,32 @@ ax.plot(
 # ax[0].legend(frameon=False, ncol=2, fontsize=10, title="baseline model")
 
 # Twin redshift axis for top panel
-t_ticks = np.array([0.3, 0.5, 1, 2, 4, 8, 12])
+t_ticks = np.array([0.3, 0.6, 1, 2, 4, 10])
 z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
-ax2_top = ax.twiny()
-ax2_top.plot(results_baseline["t"], results_baseline["m_star"], color="k", alpha=0)
-ax2_top.set(
+ax2_left = ax[0].twiny()
+ax2_left.plot(results_baseline["t"], results_baseline["m_star"], color="k", alpha=0)
+ax2_left.set(
     xscale="log",
     xlim=(0.25, results_baseline["t"][-1]),
 )
-ax2_top.set_xticks(t_ticks)
-ax2_top.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
-ax2_top.set_xlabel(r"$z$", labelpad=8)
-ax2_top.minorticks_off()
-ax.minorticks_on()
+ax2_left.set_xticks(t_ticks)
+ax2_left.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
+ax2_left.set_xlabel(r"$z$", labelpad=8)
+ax2_left.minorticks_off()
+ax[0].minorticks_on()
+
+# make another twin for right panel
+ax2_right = ax[1].twiny()
+ax2_right.plot(results_baseline["t"], results_baseline["m_star"], color="k", alpha=0)
+ax2_right.set(
+    xscale="log",
+    xlim=(0.25, results_baseline["t"][-1]),
+)
+ax2_right.set_xticks(t_ticks)
+ax2_right.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
+ax2_right.set_xlabel(r"$z$", labelpad=8)
+ax2_right.minorticks_off()
+ax[1].minorticks_on()
 
 
 t_cool_2 = derived_2phase["tcool_real"]
@@ -167,12 +175,15 @@ t_dep_effect = results_2phase["m_star"] / derived_2phase["dot_m_sfr"]
 t_ejection_2 = derived_2phase["t_ejection"]
 sim_time_2 = derived_2phase["sim_time"]
 
-ax.plot(sim_time_2, t_cool_2, lw=3, color=color_cgm, label=r"$t_{\mathrm{cool}}$")
-# ax.plot(sim_time_2, t_dynamical_2, lw=3, color="grey", label=r"$t_{\mathrm{ff}}$")
-ax.plot(
+ax[0].plot(
+    sim_time, t_dynamical, lw=3, color="grey", label=r"$t_{\mathrm{ff}}$", alpha=0.6
+)
+ax[0].plot(sim_time_2, t_cool_2, lw=3, color=color_cgm, label=r"$t_{\mathrm{cool}}$")
+# ax[1].plot(sim_time_2, t_dynamical_2, lw=3, color="grey", label=r"$t_{\mathrm{ff}}$")
+ax[0].plot(
     sim_time_2, t_dep_effect, lw=3, color=color_star, label=r"$t_{\mathrm{dep, eff}}$"
 )
-ax.plot(
+ax[0].plot(
     sim_time_2,
     t_ejection_2,
     lw=3,
@@ -183,25 +194,31 @@ ax.plot(
 # Overlay baseline depletion time for comparison
 # ax[1].plot(sim_time, t_dep, lw=3, color=color_star, label=r"$t_{\mathrm{dep}}$", ls="--")
 
-ax.set(
+ax[0].set(
     yscale="log",
     xscale="log",
-    ylim=(1e-3, 13),
+    ylim=(2e-4, 13),
     xlim=(results_2phase["t"][0] * 0.8, 13),
     ylabel=r"timescales $[\mathrm{Gyr}]$",
 )
-ax.legend(frameon=False, ncol=2, fontsize=12)
 
-ax.set_xlabel(r"time $[\mathrm{Gyr}]$")
+ax[0].legend(frameon=False, ncol=2, fontsize=11, bbox_to_anchor=(0.5, 1.15), loc="lower center", title="this work", title_fontsize=11, handlelength=1)
+ax[1].legend(frameon=False, ncol=2, fontsize=11, bbox_to_anchor=(0.5, 1.15), loc="lower center", title="C23 model", title_fontsize=11, handlelength=1)
 
+
+ax[0].set_xlabel(r"$t~[\mathrm{Gyr}]$")
+ax[1].set_xlabel(r"$t~[\mathrm{Gyr}]$")
 # Share x-axis between panels
 # ax[1].set_xlim(ax[0].get_xlim())
+# add mass
+
+ax[0].text(0.9, 0.1, r"$M_{\rm halo} = 10^{12} ~{\rm M_{\odot}}$", transform=ax[0].transAxes, ha="right", va="bottom", fontsize=12)
 
 plt.savefig(
-    "./final_figs/fig_3_model_timescales_comparison.pdf",
+    "./final_figs/fig_2_model_timescales_comparison.pdf",
     dpi=200,
     bbox_inches="tight",
-    pad_inches=0.05,
+    pad_inches=0.0,
 )
 plt.show()
 
@@ -222,7 +239,7 @@ for mhalo in halo_masses:
         disk_scale_length=0.018,
         KS_parametrization="KS1998",
         TEST_tej_Tvir_definition=False,
-        eta_z=0.7,
+        eta_z=0.6,
         alpha_e=0.1,
         alpha_m=0.1,
     )
@@ -386,7 +403,7 @@ ax[4].set(
     xlim=(halo_results[0]["sim_time_2"][0], 2),
     ylabel=r"$t_{\mathrm{ej}}/t_{\mathrm{cool}}$",
     ylim=(2e-3, 500),
-    xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
+    xlabel=r"$t [\mathrm{Gyr}]$",
 )
 ax[2].set(
     yscale="log",
@@ -431,7 +448,7 @@ ax[5].set(
     xlim=(halo_results_baseline[0]["sim_time"][0] * 0.8, 5),
     ylabel=r"$t_{\mathrm{ej}}/t_{\mathrm{cool, eff}}$",
     ylim=(0.1, 2),
-    xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
+    xlabel=r"$t [\mathrm{Gyr}]$",
 )
 ax[2].set(
     yscale="log",
@@ -505,7 +522,257 @@ ax[1].text(
 )
 
 plt.savefig(
-    "./final_figs/fig_5_timescale_ratios.pdf", dpi=200, bbox_inches="tight", pad_inches=0.05
+    "./final_figs/fig_5_timescale_ratios.pdf",
+    dpi=200,
+    bbox_inches="tight",
+    pad_inches=0.05,
+)
+plt.show()
+#%% lite version just showing tff / tcool and t_{\rm ff} / t_{\rm dep, eff}
+# 
+# for the 2 phase model and the baseline model in a 1 x  2 panel
+fig, ax = plt.subplots(2, 2,  figsize=(9.5, 5), dpi=300, sharex=True)
+ax = ax.flatten()
+plt.subplots_adjust(hspace=0.05)
+for res in halo_results:
+    color = cmap(norm(res["mhalo"].value))
+    # Since matplotlib does not support per-point linestyle, split into segments
+    times = res["sim_time_2"]
+    y_dep = res["t_dep_effect"] / res["t_cool_2"]
+    y_eject = res["t_ejection_2"] / res["t_cool_2"]
+    y_tff = res["t_ff_2"] / res["t_cool_2"]
+    t_vir = res["t_vir"]
+    t_cgm = res["cgm_temp"]
+    tff_over_tdep_eff = res["t_ff_2"] / res["t_dep_effect"]
+    mask = t_vir > threshold
+    if np.sum(mask) > 0:
+        ax[0].plot(times[mask], y_tff[mask], ls="--", lw=2, color=color)
+        ax[0].plot(times[~mask], y_tff[~mask], ls="-", lw=2, color=color)
+        ax[2].plot(times[mask], tff_over_tdep_eff[mask], ls="--", lw=2, color=color)
+        ax[2].plot(times[~mask], tff_over_tdep_eff[~mask], ls="-", lw=2, color=color)
+    else:
+        ax[0].plot(times, y_tff, ls="-", lw=2, alpha=0.9, color=color)
+        ax[2].plot(times, tff_over_tdep_eff, ls="-", lw=2, alpha=0.9, color=color)
+        
+
+    
+for res in halo_results_baseline:
+    color = cmap(norm(res["mhalo"].value))
+    times = res["sim_time"]
+    y_tff = res["t_ff"] / res["t_cool_eff"]
+    tff_over_tdep = res["t_ff"] / res["t_dep"]
+    mask = res["t_vir"] > threshold
+
+    if np.sum(mask) > 0:
+        ax[1].plot(times[mask], y_tff[mask], ls="--", lw=2, color=color)
+        ax[1].plot(times[~mask], y_tff[~mask], ls="-", lw=2, color=color)
+        ax[3].plot(times[mask], tff_over_tdep[mask], ls="--", lw=2, color=color)
+        ax[3].plot(times[~mask], tff_over_tdep[~mask], ls="-", lw=2, color=color)
+    else:
+        ax[1].plot(times, y_tff, lw=2, color=color)
+        ax[3].plot(times, tff_over_tdep, lw=2, color=color)
+
+ax[0].set(
+    yscale="log",
+    xlim=(halo_results_baseline[0]["sim_time"][0] * 0.8, 5),
+    ylabel=r"$t_{\mathrm{ff}}/t_{\mathrm{cool}}$",
+    ylim=(5e-3, 5e2),
+    xscale="log",
+    # xlabel=r"$t~[\mathrm{Gyr}]$",
+)
+ax[1].set(
+    yscale="log",
+    xlim=(halo_results_baseline[0]["sim_time"][0] * 0.8, 5),
+    ylabel=r"$t_{\mathrm{ff}}/t_{\mathrm{cool, eff}}$",
+    ylim=(5e-3, 5e2),
+    # xlabel=r"$t~[\mathrm{Gyr}]$",
+)
+ax[2].set(
+    yscale="log",
+    xlim=(halo_results_baseline[0]["sim_time"][0] * 0.8, 5),
+    ylabel=r"$t_{\mathrm{ff}}/t_{\mathrm{dep, eff}}$",
+    ylim=(5e-3, 10),
+    xlabel=r"$t~[\mathrm{Gyr}]$",
+)
+ax[3].set(
+    yscale="log",
+    xlim=(halo_results_baseline[0]["sim_time"][0] * 0.8, 5),
+    ylabel=r"$t_{\mathrm{ff}}/t_{\mathrm{dep}}$",
+    # ylim=(5e-3, 5e2),
+    ylim=(5e-3, 10),
+    xlabel=r"$t~[\mathrm{Gyr}]$",
+)
+
+cbar_ax = ax[1].inset_axes([0.23, 0.25, 0.6, 0.08])  # [x, y, width, height]
+cbar = plt.colorbar(sm, cax=cbar_ax, orientation="horizontal")
+
+cbar.set_label(r"$M_{\rm halo} (z = 0) \ [{\rm M_\odot}]$")
+cbar.set_ticks(halo_masses.value)
+# cbar.set_ticklabels([f"{m:.1e}" for m in halo_masses.value])
+cbar.ax.set_xscale("log")
+
+# add a refence line for y = 1
+ax[0].axhline(1, ls="-", lw=2, color="grey", alpha=0.5)
+ax[1].axhline(1, ls="-", lw=2, color="grey", alpha=0.5)
+ax[2].axhline(1, ls="-", lw=2, color="grey", alpha=0.5)
+ax[3].axhline(1, ls="-", lw=2, color="grey", alpha=0.5)
+
+# label panels
+ax[0].text(
+    0.90,
+    0.9,
+    "this work",
+    transform=ax[0].transAxes,
+    fontsize=10,
+    ha="right",
+    va="top",
+)
+ax[1].text(
+    0.1,
+    0.9,
+    "C23 model",
+    transform=ax[1].transAxes,
+    fontsize=10,
+    ha="left",
+    va="top",
+)
+
+# add a twin redshift axis for the top row of plots (indices 0 and 1)
+for i in [0, 1]:    
+    t_ticks = np.array([0.14, 0.3, 0.5, 1, 2, 3, 5])
+    z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
+    ax2 = ax[i].twiny()
+    ax2.set_xscale("log")
+    ax2.set_xlim(ax[i].get_xlim())
+    ax2.set_xticks(t_ticks)
+    ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
+    ax2.set_xlabel(r"$z$", labelpad=8)
+    ax2.minorticks_off()
+    ax[i].minorticks_on()
+
+for axes in ax:
+    for line in axes.lines:
+        line.set_zorder(1)
+        
+plt.savefig(
+    "./final_figs/fig_5_timescale_ratios_lite.pdf",
+    dpi=200,
+    bbox_inches="tight",
+    pad_inches=0.05,
+)
+plt.show()
+
+#%%lite_lite
+# for the 2 phase model and the baseline model in a 1 x  2 panel
+fig, ax = plt.subplots(1, 2,  figsize=(9.5, 3), dpi=300, sharex=True)
+ax = ax.flatten()
+plt.subplots_adjust(hspace=0.05)
+for res in halo_results:
+    color = cmap(norm(res["mhalo"].value))
+    # Since matplotlib does not support per-point linestyle, split into segments
+    times = res["sim_time_2"]
+    y_dep = res["t_dep_effect"] / res["t_cool_2"]
+    y_eject = res["t_ejection_2"] / res["t_cool_2"]
+    y_tff = res["t_ff_2"] / res["t_cool_2"]
+    t_vir = res["t_vir"]
+    t_cgm = res["cgm_temp"]
+    tff_over_tdep_eff = res["t_ff_2"] / res["t_dep_effect"]
+    mask = t_vir > threshold
+    if np.sum(mask) > 0:
+        ax[0].plot(times[mask], y_tff[mask], ls="--", lw=2, color=color)
+        ax[0].plot(times[~mask], y_tff[~mask], ls="-", lw=2, color=color)
+       
+    else:
+        ax[0].plot(times, y_tff, ls="-", lw=2, alpha=0.9, color=color)
+      
+        
+
+    
+for res in halo_results_baseline:
+    color = cmap(norm(res["mhalo"].value))
+    times = res["sim_time"]
+    y_tff = res["t_ff"] / res["t_cool_eff"]
+    tff_over_tdep = res["t_ff"] / res["t_dep"]
+    mask = res["t_vir"] > threshold
+
+    if np.sum(mask) > 0:
+        ax[1].plot(times[mask], y_tff[mask], ls="--", lw=2, color=color)
+        ax[1].plot(times[~mask], y_tff[~mask], ls="-", lw=2, color=color)
+      
+    else:
+        ax[1].plot(times, y_tff, lw=2, color=color)
+        
+
+ax[0].set(
+    yscale="log",
+    xlim=(halo_results_baseline[0]["sim_time"][0] * 0.8, 5),
+    ylabel=r"$t_{\mathrm{ff}}/t_{\mathrm{cool}}$",
+    ylim=(5e-3, 5e2),
+    xscale="log",
+    xlabel=r"$t~[\mathrm{Gyr}]$",
+)
+ax[1].set(
+    yscale="log",
+    xlim=(halo_results_baseline[0]["sim_time"][0] * 0.8, 5),
+    ylabel=r"$t_{\mathrm{ff}}/t_{\mathrm{cool, eff}}$",
+    ylim=(5e-3, 5e2),
+    xlabel=r"$t~[\mathrm{Gyr}]$",
+)
+
+cbar_ax = ax[1].inset_axes([0.23, 0.25, 0.6, 0.08])  # [x, y, width, height]
+cbar = plt.colorbar(sm, cax=cbar_ax, orientation="horizontal")
+
+cbar.set_label(r"$M_{\rm halo} (z = 0) \ [{\rm M_\odot}]$")
+cbar.set_ticks(halo_masses.value)
+# cbar.set_ticklabels([f"{m:.1e}" for m in halo_masses.value])
+cbar.ax.set_xscale("log")
+
+# add a refence line for y = 1
+ax[0].axhline(1, ls="-", lw=2, color="grey", alpha=0.5)
+ax[1].axhline(1, ls="-", lw=2, color="grey", alpha=0.5)
+
+# label panels
+ax[0].text(
+    0.90,
+    0.9,
+    "this work",
+    transform=ax[0].transAxes,
+    fontsize=10,
+    ha="right",
+    va="top",
+)
+ax[1].text(
+    0.1,
+    0.9,
+    "C23 model",
+    transform=ax[1].transAxes,
+    fontsize=10,
+    ha="left",
+    va="top",
+)
+
+# add a twin redshift axis for the top row of plots (indices 0 and 1)
+for i in [0, 1]:    
+    t_ticks = np.array([0.14, 0.3, 0.5, 1, 2, 3, 5])
+    z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in t_ticks]
+    ax2 = ax[i].twiny()
+    ax2.set_xscale("log")
+    ax2.set_xlim(ax[i].get_xlim())
+    ax2.set_xticks(t_ticks)
+    ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
+    ax2.set_xlabel(r"$z$", labelpad=8)
+    ax2.minorticks_off()
+    ax[i].minorticks_on()
+
+for axes in ax:
+    for line in axes.lines:
+        line.set_zorder(1)
+        
+plt.savefig(
+    "./final_figs/fig_5_timescale_ratios_litelites.pdf",
+    dpi=200,
+    bbox_inches="tight",
+    pad_inches=0.05,
 )
 plt.show()
 
@@ -538,7 +805,7 @@ for res in halo_results:
     # fourth row: Zsun
     ax[6].plot(times, Z_sun, color=color)
     ax[7].plot(times, Z_sun, color=color)
-    
+
     # fifth row: Zsun_ism
     ax[8].plot(times, Z_sun_ism, color=color)
     ax[9].plot(times, Z_sun_ism, color=color)
@@ -558,7 +825,7 @@ ax[4].set(
     xlim=(0.01, 1.05),
     ylabel=r"$\log \rho_{\rm 0,hot} ~ [{\rm M_\odot ~kpc^{-3}}]$",
     # ylim=(200, 1e7),
-    ylim=(2, 7.5)
+    ylim=(2, 7.5),
 )
 
 ax[5].set(xlim=(8.05, 13))
@@ -575,7 +842,7 @@ ticks = [np.array([0.14, 0.4, 0.6, 1]), np.array([8.5, 10, 12, 13])]
 for i in [0, 1]:
     z_ticks = [cosmology.z_at_value(LCDM.age, t * u.Gyr).value for t in ticks[i]]
     ax2 = ax[i].twiny()
-    
+
     ax2.set_xlim(ax[i].get_xlim())
     ax2.set_xticks(ticks[i])
     ax2.set_xticklabels(["{:.1f}".format(z) for z in z_ticks])
@@ -622,7 +889,7 @@ cbar.set_label(r"$M_{\rm halo} (z=0) \ [M_\odot]$")
 fig.text(
     1.1,
     -0.15,
-    r"$t_{\rm univ}$ [Gyr]",
+    r"$t$ [Gyr]",
     ha="center",
     va="top",
     transform=ax[8].transAxes,
@@ -632,7 +899,7 @@ for axes in ax:
     for line in axes.lines:
         line.set_zorder(1)
 plt.savefig(
-    "./final_figs/fig_6_cgm_temperature_and_density.pdf",
+    "./final_figs/fig_7_cgm_temperature_and_density.pdf",
     dpi=300,
     bbox_inches="tight",
     pad_inches=0.05,
@@ -770,22 +1037,18 @@ if PLOT_TWO_PANEL:
         xscale="log",
     )
     ax[0, 1].set(yscale="log", xlim=(0.08, 5), xscale="log")
-    ax[1, 0].set(
-        yscale="log", ylabel=r"$\dot{E}_{\rm ej}/\dot{E}_{\rm CGM, added}$"
-    )
+    ax[1, 0].set(yscale="log", ylabel=r"$\dot{E}_{\rm ej}/\dot{E}_{\rm CGM, added}$")
     ax[1, 1].set(yscale="log")
-    ax[2, 0].set(
-        yscale="log", ylabel=r"$\dot{E}_{\rm in}/\dot{E}_{\rm CGM, added}$"
-    )
+    ax[2, 0].set(yscale="log", ylabel=r"$\dot{E}_{\rm in}/\dot{E}_{\rm CGM, added}$")
     ax[2, 1].set(yscale="log")
     ax[3, 0].set(
         yscale="log",
         ylabel=r"$\dot{E}_{\rm SNe,wind}/\dot{E}_{\rm CGM, added}$",
-        xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
+        xlabel=r"$t [\mathrm{Gyr}]$",
     )
     ax[3, 1].set(
         yscale="log",
-        xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
+        xlabel=r"$t [\mathrm{Gyr}]$",
     )
 
     ax[0, 0].text(
@@ -819,7 +1082,7 @@ else:
     ax[3].set(
         yscale="log",
         ylabel=r"$\dot{E}_{\rm SNe,wind}/\dot{E}_{\rm CGM, added}$",
-        xlabel=r"$t_{\rm univ} [\mathrm{Gyr}]$",
+        xlabel=r"$t [\mathrm{Gyr}]$",
     )
 
 for axes in ax.flatten() if PLOT_TWO_PANEL else ax:
@@ -853,7 +1116,7 @@ for axes in ax.flatten() if PLOT_TWO_PANEL else ax:
     axes.grid(True, which="both", ls="-", lw=0.5, alpha=0.5, zorder=0)
 
 plt.savefig(
-    "./final_figs/fig_7_dotE_contribution_ratios.pdf",
+    "./final_figs/fig_6_dotE_contribution_ratios.pdf",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,

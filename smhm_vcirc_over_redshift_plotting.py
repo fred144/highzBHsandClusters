@@ -170,13 +170,15 @@ def virial_T(mhalo, Rvir):
 def virial_radius(z, mhalo, Delc=200):
     """
     Halo virial radius, classical 200 top-hat overdensity.
-    Supports z as a 1D array and mhalo as a 2D array (shape: [len(z), N]).
+    Supports z as a 1D array and mhalo as a 2D array (shape: [len(z), N]),
+    or a 3D array with a trailing MULTIPLE_RUNS realization axis
+    (shape: [len(z), N, n_runs]).
     Args:
         z (array-like): Redshift array of shape (len(z),)
-        mhalo (array-like): Halo mass array of shape (len(z), N)
+        mhalo (array-like): Halo mass array of shape (len(z), N[, n_runs])
         Delc (float): Overdensity parameter (default: 200)
     Returns:
-        ndarray: Virial radius array of shape (len(z), N)
+        ndarray: Virial radius array, same shape as mhalo
     """
     z = np.asarray(z)
 
@@ -184,8 +186,8 @@ def virial_radius(z, mhalo, Delc=200):
     if not isinstance(mhalo, u.Quantity):
         mhalo = mhalo * u.Msun
 
-    # Broadcast critical density to shape (len(z), 1)
-    rhoc = LCDM.critical_density(z)[:, np.newaxis]
+    # Broadcast critical density to shape (len(z), 1[, 1])
+    rhoc = LCDM.critical_density(z).reshape((len(z),) + (1,) * (mhalo.ndim - 1))
     rvir = (mhalo / (rhoc * (4 / 3) * np.pi * Delc)) ** (1 / 3)
 
     return rvir.to(u.kpc)
@@ -232,7 +234,7 @@ models_label_C23 = "C23 model"
 kappa_sfr = 0.02
 n_sfr = 1.8
 r_disk_sfr = 0.018
-eta_z = 0.7
+eta_z = 0.6
 param_txt = (
     f"redshift_scan_KS_1998_16bins_Radau_{str(kappa_sfr).replace('.', 'p')}_"
     + f"n{str(n_sfr).replace('.', 'p')}_"
@@ -674,6 +676,317 @@ ax[0].text(
 )
 plt.savefig(
     "./final_figs/fig_8_comparison_SMHM_KS_kap0p02_rd_0p018_n_1p8_etaZ_0p7.pdf",
+    dpi=200,
+    bbox_inches="tight",
+    pad_inches=0.05,
+)
+plt.show()
+
+# %% MULTIPLE_RUNS version of Fig. 8: exact duplicate of the figure above --
+# same right column (C23, unchanged), same Shuntov/Behroozi observational
+# bands and Tvir>=1e6 dotted-line treatment -- but the left ("this work")
+# column now shows the MULTIPLE_RUNS population median + 16th/84th
+# percentile band instead of a single deterministic curve. Reads the grid
+# produced by run_grids_of_models.py's MULTIPLE_RUNS smoke-test cell (same
+# zobs/mhalos/KS params as the 2-phase grid above), rather than
+# regenerating anything here.
+mr_file = "./runs/TEST_multiple_runs_smhm_vcirc_2phase_grid.h5"
+
+with h5py.File(mr_file, "r") as f:
+    smhm_mr = f["SMHM"][:]  # (n_z, n_mhalo, n_runs), baryon-fraction normalized
+    mhalo_obs_mr = f["Mhalo_obs"][:] * u.Msun  # (n_z, n_mhalo, n_runs)
+    zobs_mr = f["redshifts"][:]
+    n_runs_mr = f.attrs["n_realizations"]
+
+rvirs_mr = virial_radius(zobs_mr, mhalo_obs_mr)
+halo_Tvirs_mr = virial_T(mhalo_obs_mr, rvirs_mr)
+
+# median + 16th/84th percentile band across the N_HALOS_TO_RUN realizations
+# (last axis). Percentiles rather than mean +/- std keep the band positive,
+# which matters on these log-scaled axes.
+smhm_mr_median = np.median(smhm_mr, axis=-1)
+smhm_mr_lo = np.percentile(smhm_mr, 16, axis=-1)
+smhm_mr_hi = np.percentile(smhm_mr, 84, axis=-1)
+# plain ndarrays (not Quantity): fill_between builds a raw float points
+# array internally, and a Quantity with non-dimensionless units (K, Msun)
+# raises a UnitConversionError when implicitly cast to float there.
+mhalo_mr_median = np.median(mhalo_obs_mr.value, axis=-1)
+Tvir_mr_median = np.median(halo_Tvirs_mr.value, axis=-1)
+
+fig, ax = plt.subplots(2, 2, figsize=(10, 6.25), dpi=300, sharex="row", sharey="row")
+plt.subplots_adjust(hspace=0.23, wspace=0.05)
+ax = ax.ravel()
+
+ax[2].plot(
+    [1e6, 1e6],
+    [3e-3, 0.45],
+    color="w",
+    lw=2,
+    ls=":",
+    label=r"${\rm Shuntov\:et.\:al.\:24 \: observations}$",
+)
+ax[2].plot(
+    [1e6, 1e6],
+    [3e-3, 0.45],
+    color="k",
+    lw=2,
+    ls=":",
+    label=r"$T_{\rm vir} \geq 10^6$ K",
+)
+
+for i, zb in enumerate(zbins_str[::-1]):
+    color = cmap_colors[::-1][i]
+
+    # right column: C23, unchanged from the deterministic figure above
+    ax[1].plot(
+        halo_Tvirs_C23[i], smhm_normalized_C23[i], color=color, lw=2, label=f"${zbins_ctr[i]}$"
+    )
+    mask_scatter_C23 = halo_Tvirs_C23[i].value < 1e6
+    ax[1].scatter(
+        halo_Tvirs_C23[i][mask_scatter_C23],
+        smhm_normalized_C23[i][mask_scatter_C23],
+        color=color,
+        s=25,
+        marker="o",
+        edgecolor="k",
+        linewidth=0.5,
+        zorder=5,
+    )
+
+    # left column: this work, MULTIPLE_RUNS population median + band
+    ax[0].fill_between(
+        Tvir_mr_median[i], smhm_mr_lo[i], smhm_mr_hi[i], color=color, alpha=0.25, lw=0, zorder=4
+    )
+    ax[0].plot(
+        Tvir_mr_median[i],
+        smhm_mr_median[i],
+        color=color,
+        lw=2,
+        zorder=6,
+        label=f"${zbins_ctr[i]}$",
+    )
+    mask_scatter_mr = Tvir_mr_median[i] < 1e6
+    ax[0].scatter(
+        Tvir_mr_median[i][mask_scatter_mr],
+        smhm_mr_median[i][mask_scatter_mr],
+        color=color,
+        s=25,
+        marker="o",
+        edgecolor="k",
+        linewidth=0.5,
+        zorder=7,
+    )
+
+    smhm_shuntov_low = np.array(Mstar_low[zb]) / (np.array(Mhalo[zb]) * (Ob0 / Omegam0))
+    smhm_shuntov_up = np.array(Mstar_up[zb]) / (np.array(Mhalo[zb]) * (Ob0 / Omegam0))
+    ax[3].fill_between(
+        Mhalo[zb], smhm_shuntov_low, smhm_shuntov_up, lw=0, alpha=0.3, color=color, label=f"${zb}$"
+    )
+    ax[2].fill_between(
+        Mhalo[zb], smhm_shuntov_low, smhm_shuntov_up, lw=0, alpha=0.3, color=color, label=f"${zb}$"
+    )
+
+    # right column bottom: C23, unchanged
+    mask_C23 = halo_Tvirs_C23[i].value < 1e6
+    ax[3].plot(
+        mhalo_obs_C23[i][mask_C23], smhm_normalized_C23[i][mask_C23], color=color, lw=2
+    )
+    ax[3].plot(
+        mhalo_obs_C23[i][~mask_C23],
+        smhm_normalized_C23[i][~mask_C23],
+        color=color,
+        lw=2,
+        alpha=0.8,
+        ls=":",
+    )
+    ax[3].plot(
+        [mhalo_obs_C23[i][mask_C23][-1], mhalo_obs_C23[i][~mask_C23][0]],
+        [smhm_normalized_C23[i][mask_C23][-1], smhm_normalized_C23[i][~mask_C23][0]],
+        color=color,
+        lw=2,
+        ls=":",
+    )
+
+    # left column bottom: this work, MULTIPLE_RUNS population median + band
+    ax[2].fill_between(
+        mhalo_mr_median[i], smhm_mr_lo[i], smhm_mr_hi[i], color=color, alpha=0.25, lw=0, zorder=4
+    )
+    ax[2].plot(mhalo_mr_median[i], smhm_mr_median[i], color=color, lw=2, zorder=6)
+
+
+ax[3].set(
+    xlabel=r"$M_{\rm halo} \: {\rm [M_\odot]}$",
+    yscale="log",
+    xscale="log",
+    xlim=(1e10, 9e12),
+    ylim=(3e-3, 0.8),
+)
+ax[1].set(
+    xlabel=r"$T_{\rm vir} \: {\rm [K]}$",
+    yscale="log",
+    xscale="log",
+    xlim=(3e4, 5e7),
+    ylim=(3e-3, 0.8),
+)
+ax[0].set(
+    xlabel=r"$T_{\rm vir} \: {\rm [K]}$",
+    yscale="log",
+    xscale="log",
+    xlim=(3e4, 5e7),
+    ylabel=r"$M_{\star}$/ $M_{\rm halo} (\Omega_{\rm b}/\Omega_{\rm m})$",
+)
+ax[2].set(
+    xlabel=r"$M_{\rm halo} \: {\rm [M_\odot]}$",
+    yscale="log",
+    xscale="log",
+    xlim=(1e10, 9e12),
+    ylabel=r"$M_{\star}$/ $M_{\rm halo} (\Omega_{\rm b}/\Omega_{\rm m})$",
+)
+
+# twin x-axis showing circular velocity corresponding to T_vir, same as above
+tvir_ticks = ax[1].get_xticks()
+tvir_ticks = tvir_ticks[
+    (tvir_ticks >= ax[1].get_xlim()[0]) & (tvir_ticks <= ax[1].get_xlim()[1])
+]
+vcirc_ticks = vcirc_from_virial_T(tvir_ticks * u.K).value
+
+ax1_vcirc = ax[1].twiny()
+ax1_vcirc.set_xscale("log")
+ax1_vcirc.set_xlim(ax[1].get_xlim())
+ax1_vcirc.set_xticks(tvir_ticks)
+ax1_vcirc.set_xticklabels(["{:.0f}".format(v) for v in vcirc_ticks])
+ax1_vcirc.set_xlabel(r"$v_{\rm circ} \:  {\rm [km/s]}$ ", labelpad=10)
+
+ax0_vcirc = ax[0].twiny()
+ax0_vcirc.set_xscale("log")
+ax0_vcirc.set_xlim(ax[0].get_xlim())
+ax0_vcirc.set_xticks(tvir_ticks)
+ax0_vcirc.set_xticklabels(["{:.0f}".format(v) for v in vcirc_ticks])
+ax0_vcirc.set_xlabel(r"$v_{\rm circ} \:  {\rm [km/s]}$ ", labelpad=10)
+
+# add z = 0
+ax[3].fill_between(
+    10**loghm,
+    smhm_behroozi * smhm_err_low,
+    smhm_behroozi * smhm_err_up,
+    facecolor="grey",
+    alpha=0.3,
+    zorder=0,
+)
+ax[2].fill_between(
+    10**loghm,
+    smhm_behroozi * smhm_err_low,
+    smhm_behroozi * smhm_err_up,
+    facecolor="grey",
+    alpha=0.3,
+    zorder=0,
+)
+ax[2].text(
+    0.05,
+    0.01,
+    r"$z=0$ (Behroozi et al. 2019)",
+    transform=ax[2].transAxes,
+    fontsize=8,
+    rotation=32,
+    ha="left",
+)
+
+# right column, z = 0 (C23, unchanged)
+ax[1].plot(
+    halo_Tvirs_C23[-1], smhm_normalized_C23[-1], color="grey", lw=2, label="0.0", alpha=0.8
+)
+mask_z0_C23 = halo_Tvirs_C23[-1].value < 1e6
+ax[1].scatter(
+    halo_Tvirs_C23[-1][mask_z0_C23],
+    smhm_normalized_C23[-1][mask_z0_C23],
+    color="grey",
+    s=25,
+    marker="o",
+    edgecolor="k",
+    linewidth=0.5,
+    zorder=5,
+    alpha=0.8,
+)
+
+# left column, z = 0 (MULTIPLE_RUNS)
+ax[0].fill_between(
+    Tvir_mr_median[-1], smhm_mr_lo[-1], smhm_mr_hi[-1], color="grey", alpha=0.25, lw=0, zorder=4
+)
+ax[0].plot(
+    Tvir_mr_median[-1], smhm_mr_median[-1], color="grey", lw=2, zorder=6, label="0.0", alpha=0.8
+)
+mask_z0_mr = Tvir_mr_median[-1] < 1e6
+ax[0].scatter(
+    Tvir_mr_median[-1][mask_z0_mr],
+    smhm_mr_median[-1][mask_z0_mr],
+    color="grey",
+    s=25,
+    marker="o",
+    edgecolor="k",
+    linewidth=0.5,
+    zorder=7,
+    alpha=0.8,
+)
+
+ax[1].text(
+    0.05, 0.95, models_label_C23, transform=ax[1].transAxes, ha="left", va="top", fontsize=10
+)
+
+# right column bottom, z = 0 (C23, unchanged)
+mask_C23 = halo_Tvirs_C23[-1].value < 1e6
+ax[3].plot(
+    mhalo_obs_C23[-1][mask_C23], smhm_normalized_C23[-1][mask_C23], color="grey", lw=2, alpha=1
+)
+ax[3].plot(
+    mhalo_obs_C23[-1][~mask_C23],
+    smhm_normalized_C23[-1][~mask_C23],
+    color="grey",
+    lw=2,
+    alpha=0.8,
+    ls=":",
+)
+ax[3].plot(
+    [mhalo_obs_C23[-1][mask_C23][-1], mhalo_obs_C23[-1][~mask_C23][0]],
+    [smhm_normalized_C23[-1][mask_C23][-1], smhm_normalized_C23[-1][~mask_C23][0]],
+    color="grey",
+    lw=2,
+    ls=":",
+)
+
+# left column bottom, z = 0 (MULTIPLE_RUNS)
+ax[2].fill_between(
+    mhalo_mr_median[-1], smhm_mr_lo[-1], smhm_mr_hi[-1], color="grey", alpha=0.25, lw=0, zorder=4
+)
+ax[2].plot(mhalo_mr_median[-1], smhm_mr_median[-1], color="grey", lw=2, zorder=6, alpha=1)
+
+ax[2].legend(
+    frameon=False,
+    fontsize=9,
+    ncol=5,
+    title_fontsize=10,
+    bbox_to_anchor=(1, -0.2),
+    loc="upper center",
+)
+ax[0].legend(
+    frameon=False,
+    fontsize=8,
+    ncol=3,
+    title=r"$z$",
+    title_fontsize=10,
+    loc="lower right",
+)
+
+ax[0].text(
+    0.05,
+    0.95,
+    f"this work\n(MULTIPLE\\_RUNS, N={n_runs_mr})",
+    transform=ax[0].transAxes,
+    ha="left",
+    va="top",
+    fontsize=10,
+)
+plt.savefig(
+    "./runs/fig_8_multiple_runs_comparison_SMHM.png",
     dpi=200,
     bbox_inches="tight",
     pad_inches=0.05,

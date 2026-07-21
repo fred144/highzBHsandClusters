@@ -243,7 +243,7 @@ smhm_err_low = 10 ** SMHMerr[0, :]
 #     yscale="log",
 #     ylim=(1e7, None),
 #     xlim=(0.25, results["t"][-1]),
-#     xlabel=r"$t_{\rm univ}$ [Gyr]",
+#     xlabel=r"$t$ [Gyr]",
 # )
 
 # ax[1].legend(ncol=3, frameon=False, fontsize=9, loc="lower right")
@@ -349,7 +349,7 @@ smhm_err_low = 10 ** SMHMerr[0, :]
 #     yscale="log",
 #     ylim=(2e55, 6e58),
 #     xlim=(0.25, results["t"][-1]),
-#     xlabel=r"$t_{\rm univ}$ [Gyr]",
+#     xlabel=r"$t$ [Gyr]",
 # )
 # ax[2].legend(ncol=2, frameon=False, fontsize=9, loc="lower right")
 # ax[2].text(
@@ -471,7 +471,7 @@ latest_model = CGMRegulator(
     disk_scale_length=0.018,
     KS_parametrization="KS1998",
     TEST_tej_Tvir_definition=False,
-    eta_z=0.7,
+    eta_z=0.6,
     alpha_e=0.1,
     alpha_m=0.1,
 )
@@ -506,7 +506,7 @@ baseline_model = CGMRegulatorBaseline(
 run = baseline_model.run_halo()
 results = baseline_model.get_results()
 derived = baseline_model.get_derived_quantities()
-
+#%%
 matplotlib.rcParams.update(matplotlib.rcParamsDefault)
 plt.rcParams.update(
     {
@@ -514,9 +514,9 @@ plt.rcParams.update(
         # "font.family": "Helvetica",
         "font.family": "serif",
         "mathtext.fontset": "cm",
-        "xtick.labelsize": 10,
-        "ytick.labelsize": 10,
-        "font.size": 11,
+        "xtick.labelsize": 12,
+        "ytick.labelsize": 12,
+        "font.size": 13,
         "xtick.direction": "in",
         "ytick.direction": "in",
         "ytick.right": True,
@@ -539,8 +539,8 @@ color_baseline = cmap(0)  # Baseline model
 color_latest = cmap(1)  # Latest model
 
 
-fig, ax = plt.subplots(5, 2, figsize=(12.1, 12.25), dpi=300, sharex=True)
-fig.subplots_adjust(hspace=0.42, wspace=0.2)
+fig, ax = plt.subplots(5, 2, figsize=(12, 12.25), dpi=300, sharex=True)
+fig.subplots_adjust(hspace=0.42, wspace=0.15)
 ax = ax.flatten()
 # make a inset panel to take its place
 ax0 = ax[0].inset_axes([0, -1.3, 1, 2.3])
@@ -598,6 +598,10 @@ ax[4].set(
     xlim=(0.25, results["t"][-1]),
     
 )
+# add the mass of this halo
+ax[4].text(0.15, 0.85, r"$M_{\rm halo} = 10^{12} ~{\rm M_{\odot}}$", transform=ax[4].transAxes, ha="left", va="top", fontsize=12)
+
+
 # make an inset to plot the fractional difference
 ax4 = ax[4].inset_axes([0, -0.3, 1, 0.3])
 ax4.plot(results_latest["t"], (results_latest["m_star"] - results["m_star"]) / results["m_star"], color=color_cgm , lw=1.5)
@@ -642,7 +646,7 @@ ax8.plot(results_latest["t"], (results_latest["m_cgm"] - results["m_cgm"]) / res
 ax8.set( xlim=(0.25, results["t"][-1]), ylim=(-1.5, 1.5), xscale="log")
 ax8.axhline(0, color="k", lw=0.5, ls=":")
 ax8.set_ylabel(ylabel="frac. diff", fontsize=9)
-ax8.set_xlabel(r"$t_{\rm univ}$ [Gyr]")
+ax8.set_xlabel(r"$t$ [Gyr]")
 
 
 # show the cool and hot CGM phases
@@ -658,9 +662,9 @@ ax[8].plot(
     results_latest["m_cgm_cold"],
     color="tab:blue",
     lw=2,
-    label="cold CGM",
+    label="cool CGM",
 )
-ax[8].legend(frameon=False, fontsize=9, loc="lower right")
+ax[8].legend(frameon=False, fontsize=12, loc="lower right")
 
 # total energy
 ax[1].plot(results_latest["t"], results_latest["egy_cgm"], color=color_latest, lw=3)
@@ -744,7 +748,7 @@ ax9.plot(results_latest["t"], (results_latest["egy_cgm_in"] - results["egy_accre
 ax9.set( xlim=(0.25, results["t"][-1]), ylim=(-1.5, 1.5), xscale="log")
 ax9.axhline(0, color="k", lw=0.5, ls=":")
 ax9.set_ylabel(ylabel="frac. diff", fontsize=9)
-ax9.set_xlabel(r"$t_{\rm univ}$ [Gyr]")
+ax9.set_xlabel(r"$t$ [Gyr]")
 
 # Apply the same settings to all relevant axes except ax[0] and ax[2] (which are turned off)
 for i in range(len(ax)):
